@@ -1,6 +1,6 @@
 /**
  * dep - Efficient version control.
- * Module: Branching (v0.0.5)
+ * Module: Branching (v0.0.6)
  */
 
 const fs = require('fs');
@@ -11,31 +11,38 @@ const getStateByHash = require('../utils/getStateByHash');
 /**
  * Lists, creates, or deletes branches.
  */
-
+ 
 function branch (name) {
   const depPath = path.join(process.cwd(), '.dep');
   const localHistoryPath = path.join(depPath, 'history/local');
+  const remoteHistoryPath = path.join(depPath, 'history/remote');
 
   if (!name) {
     return fs.readdirSync(localHistoryPath);
   }
 
-  const branchPath = path.join(localHistoryPath, name);
+  const branchLocalPath = path.join(localHistoryPath, name);
+  const branchRemotePath = path.join(remoteHistoryPath, name);
 
-  if (fs.existsSync(branchPath)) {
-    throw new Error(`Branch "${name}" already exists.`);
+  if (fs.existsSync(branchLocalPath)) {
+    throw new Error(`Branch "${name}" already exists locally.`);
   }
 
-  fs.mkdirSync(branchPath, { recursive: true });
-
-  const historyManifest = {
-    commits: []
-  };
+  fs.mkdirSync(branchLocalPath, { recursive: true });
 
   fs.writeFileSync(
-    path.join(branchPath, 'manifest.json'),
-    JSON.stringify(historyManifest, null, 2)
+    path.join(branchLocalPath, 'manifest.json'),
+    JSON.stringify({ commits: [] }, null, 2)
   );
+
+  if (!fs.existsSync(branchRemotePath)) {
+    fs.mkdirSync(branchRemotePath, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(branchRemotePath, 'manifest.json'),
+      JSON.stringify({ commits: [] }, null, 2)
+    );
+  }
 
   return `Created branch "${name}".`;
 }
@@ -133,7 +140,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.0.5',
+  __libraryVersion: '0.0.6',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

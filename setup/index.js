@@ -1,6 +1,6 @@
 /**
  * dep - Efficient version control.
- * Module: Setup (v0.0.5)
+ * Module: Setup (v0.0.6)
  */
 
 const fs = require('fs');
@@ -60,6 +60,11 @@ function init (directoryPath = process.cwd()) {
 
   fs.writeFileSync(
     path.join(depDirectory, 'history/local/main/manifest.json'),
+    JSON.stringify({ commits: [] }, null, 2)
+  );
+
+  fs.writeFileSync(
+    path.join(depDirectory, 'history/remote/main/manifest.json'),
     JSON.stringify({ commits: [] }, null, 2)
   );
 

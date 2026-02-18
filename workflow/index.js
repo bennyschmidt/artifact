@@ -1,6 +1,6 @@
 /**
  * dep - Efficient version control.
- * Module: Workflow (v0.0.5)
+ * Module: Workflow (v0.0.6)
  */
 
 const fs = require('fs');
@@ -61,9 +61,6 @@ function add (filePath) {
 
   const content = fs.readFileSync(fullPath, 'utf8');
 
-  // Currently records full content for the commit diff logic.
-  // In our replay design, this is treated as a 'createFile' or 'update' operation.
-
   stage.changes[filePath] = {
     type: 'createFile',
     content: content
@@ -116,31 +113,22 @@ function commit (message) {
   const commitFilePath = path.join(branchHistoryDir, `${hash}.json`);
   const manifestPath = path.join(branchHistoryDir, 'manifest.json');
 
-  // Write the commit file
-
   fs.writeFileSync(commitFilePath, JSON.stringify(commitObject, null, 2));
-
-  // Update the branch manifest
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
   manifest.commits.push(hash);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  // Update dep.json active pointer
-
   depJson.active.parent = hash;
   fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
-
-  // Clear stage by deleting the file
-
   fs.unlinkSync(stagePath);
 
   return `[${branch} ${hash.slice(0, 7)}] ${message}`;
 }
 
 module.exports = {
-  __libraryVersion: '0.0.5',
+  __libraryVersion: '0.0.6',
   __libraryAPIName: 'Workflow',
   status,
   add,
