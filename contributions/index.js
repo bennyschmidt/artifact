@@ -1,6 +1,6 @@
 /**
  * dep - Efficient version control.
- * Module: Contributions (v0.0.6)
+ * Module: Contributions (v0.0.7)
  */
 
 const fs = require('fs');
@@ -209,6 +209,10 @@ async function push () {
       })
     });
   }
+
+  const remoteManifestPath = path.join(depPath, 'history/remote', branch, 'manifest.json');
+
+  fs.writeFileSync(remoteManifestPath, JSON.stringify(localManifest, null, 2));
 
   return `Pushed ${missingCommits.length} commits to remote.`;
 }
