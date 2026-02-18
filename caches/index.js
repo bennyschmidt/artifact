@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Caches (v0.1.5)
+ * Module: Caches (v0.1.6)
  */
 
 const fs = require('fs');
@@ -107,12 +107,20 @@ const getStateByHash = require('../utils/getStateByHash');
 
    fs.writeFileSync(stashFilePath, JSON.stringify({ changes: stashChanges }, null, 2));
 
-   if (fs.existsSync(stagePath)) fs.unlinkSync(stagePath);
+    for (const [filePath, change] of Object.entries(stashChanges)) {
+      const fullPath = path.join(root, filePath);
 
-   checkout(depJson.active.branch);
+      if (change.type === 'createFile' && fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath); // Physically remove the file from workdir
+      }
+    }
 
-   return `Cached working directory changes in stash_${timestamp}.`;
- }
+    if (fs.existsSync(stagePath)) fs.unlinkSync(stagePath);
+
+    checkout(depJson.active.branch);
+
+    return `Cached working directory changes in stash_${timestamp}.`;
+  }
 
 /**
  * Wipes the stage and moves the active parent pointer if a hash is provided.
@@ -186,7 +194,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.1.5',
+  __libraryVersion: '0.1.6',
   __libraryAPIName: 'Caches',
   stash,
   reset,

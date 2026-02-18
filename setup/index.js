@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Setup (v0.1.5)
+ * Module: Setup (v0.1.6)
  */
 
 const fs = require('fs');
@@ -93,132 +93,146 @@ function init (directoryPath = process.cwd()) {
   * @param {string} providedToken - Optional token for authentication.
   */
 
- async function clone (repoSlug, providedToken = null) {
+ async function clone(repoSlug, providedToken = null) {
    if (!repoSlug || !repoSlug.includes('/')) {
-     throw new Error('A valid slug is required.');
+     throw new Error('A valid slug is required (e.g., handle/repo).');
    }
 
    const [handle, repo] = repoSlug.split('/');
    const targetPath = path.join(process.cwd(), repo);
-   const depPath = path.join(targetPath, '.dep');
-   const depJsonPath = path.join(depPath, 'dep.json');
+   const originalCwd = process.cwd();
 
    if (fs.existsSync(targetPath)) {
      throw new Error(`Destination path "${targetPath}" already exists.`);
    }
 
-   fs.mkdirSync(targetPath);
+   fs.mkdirSync(targetPath, { recursive: true });
    init(targetPath);
+   process.chdir(targetPath);
 
-   if (providedToken) {
+   try {
+     const depPath = path.join(targetPath, '.dep');
+     const depJsonPath = path.join(depPath, 'dep.json');
+
+     if (providedToken) {
+       const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+
+       depJson.configuration.personalAccessToken = providedToken;
+       fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+
+       remote(`${handle}/${repo}`);
+     }
+
      const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+     const token = depJson.configuration.personalAccessToken;
 
-     depJson.configuration.personalAccessToken = providedToken;
+     const rootRes = await fetch(`${DEP_HOST}/manifest`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         type: 'root',
+         handle,
+         repo,
+         branch: 'main',
 
-     fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
-     remote(`${handle}/${repo}`);
-   }
+         ...(token && { personalAccessToken: token })
+       })
+     });
 
-   const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-   const token = depJson.configuration.personalAccessToken;
-
-   const rootRes = await fetch(`${DEP_HOST}/manifest`, {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({
-       type: 'root',
-       handle,
-       repo,
-       branch: 'main',
-
-       ...(token && { personalAccessToken: token })
-     })
-   });
-
-   if (rootRes.status === 401 || rootRes.status === 403) {
-     throw new Error('Authentication failed. An access token is required for this repository.');
-   }
-
-   const rootManifest = await rootRes.json();
-
-   if (rootManifest.files) {
-     for (const file of rootManifest.files) {
-       const internalRootPath = path.join(depPath, 'root', file.path);
-       const workingPath = path.join(targetPath, file.path);
-
-       fs.mkdirSync(path.dirname(internalRootPath), { recursive: true });
-       fs.writeFileSync(internalRootPath, file.content);
-       fs.writeFileSync(workingPath, file.content);
+     if (rootRes.status === 401 || rootRes.status === 403) {
+       throw new Error('Authentication failed. Access token required.');
      }
-   }
 
-   const historyRes = await fetch(`${DEP_HOST}/manifest`, {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({
-       type: 'history',
-       handle,
-       repo,
-       branch: 'main',
+     const rootManifest = await rootRes.json();
 
-       ...(token && { personalAccessToken: token })
-     })
-   });
+     if (rootManifest.files) {
+       for (const file of rootManifest.files) {
+         const internalRootPath = path.join(depPath, 'root', file.path);
+         const workingPath = path.join(targetPath, file.path);
 
-   const historyManifest = await historyRes.json();
-
-   if (historyManifest.commits) {
-     for (const commitHash of historyManifest.commits) {
-       const commitRes = await fetch(`${DEP_HOST}/commit`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-           handle,
-           repo,
-           branch: 'main',
-           hash: commitHash,
-
-           ...(token && { personalAccessToken: token })
-         })
-       });
-
-       const commitDiff = await commitRes.json();
-
-       for (const filePath of Object.keys(commitDiff.changes)) {
-         const fullPath = path.join(targetPath, filePath);
-         const changeSet = commitDiff.changes[filePath];
-
-         if (Array.isArray(changeSet)) {
-           let currentContent = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
-
-           for (const operation of changeSet) {
-             if (operation.type === 'insert') {
-               currentContent = currentContent.slice(0, operation.position) + operation.content + currentContent.slice(operation.position);
-             } else if (operation.type === 'delete') {
-               currentContent = currentContent.slice(0, operation.position) + currentContent.slice(operation.position + operation.length);
-             }
-           }
-
-           fs.writeFileSync(fullPath, currentContent);
-         } else if (changeSet.type === 'deleteFile') {
-           if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-         } else if (changeSet.type === 'createFile') {
-           fs.writeFileSync(fullPath, changeSet.content || '');
-         }
+         fs.mkdirSync(path.dirname(internalRootPath), { recursive: true });
+         fs.writeFileSync(internalRootPath, file.content);
+         fs.writeFileSync(workingPath, file.content);
        }
-
-       const remoteHistoryDir = path.join(depPath, 'history/remote/main');
-
-       if (!fs.existsSync(remoteHistoryDir)) fs.mkdirSync(remoteHistoryDir, { recursive: true });
-
-       fs.writeFileSync(
-         path.join(remoteHistoryDir, `${commitHash}.json`),
-         JSON.stringify(commitDiff, null, 2)
-       );
      }
-   }
 
-   return `Successfully cloned and replayed ${repoSlug}.`;
+     const historyRes = await fetch(`${DEP_HOST}/manifest`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         type: 'history',
+         handle,
+         repo,
+         branch: 'main',
+
+         ...(token && { personalAccessToken: token })
+       })
+     });
+
+     const historyManifest = await historyRes.json();
+
+     if (historyManifest.commits) {
+       for (const commitHash of historyManifest.commits) {
+         const commitRes = await fetch(`${DEP_HOST}/commit`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             handle,
+             repo,
+             branch: 'main',
+             hash: commitHash,
+
+             ...(token && { personalAccessToken: token })
+           })
+         });
+
+         const commitDiff = await commitRes.json();
+
+         for (const filePath of Object.keys(commitDiff.changes)) {
+           const fullPath = path.join(targetPath, filePath);
+           const changeSet = commitDiff.changes[filePath];
+
+           if (Array.isArray(changeSet)) {
+             let currentContent = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
+
+             for (const operation of changeSet) {
+               if (operation.type === 'insert') {
+                 currentContent = currentContent.slice(0, operation.position) + operation.content + currentContent.slice(operation.position);
+               } else if (operation.type === 'delete') {
+                 currentContent = currentContent.slice(0, operation.position) + currentContent.slice(operation.position + operation.length);
+               }
+             }
+
+             fs.writeFileSync(fullPath, currentContent);
+           } else if (changeSet.type === 'deleteFile') {
+             if (fs.existsSync(fullPath)) {
+               fs.unlinkSync(fullPath);
+             }
+           } else if (changeSet.type === 'createFile') {
+             fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+             fs.writeFileSync(fullPath, changeSet.content || '');
+           }
+         }
+
+         const remoteHistoryDir = path.join(depPath, 'history/remote/main');
+
+         if (!fs.existsSync(remoteHistoryDir)) {
+           fs.mkdirSync(remoteHistoryDir, { recursive: true });
+         }
+
+         fs.writeFileSync(
+           path.join(remoteHistoryDir, `${commitHash}.json`),
+           JSON.stringify(commitDiff, null, 2)
+         );
+       }
+     }
+
+     return `Successfully cloned and replayed ${repoSlug}.`;
+   } catch (error) {
+     throw error;
+   } finally {
+     process.chdir(originalCwd);
+   }
  }
 
 /**

@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Contributions (v0.1.5)
+ * Module: Contributions (v0.1.6)
  */
 
 const fs = require('fs');
@@ -48,7 +48,7 @@ async function fetchRemote () {
   const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
 
   if (!depJson.remote) {
-    throw new Error('Remote URL not configured. Use "dep remote <url|slug>".');
+    throw new Error('Remote URL not configured. Use "dep remote <handle>/<repo>".');
   }
 
   const branch = depJson.active.branch;

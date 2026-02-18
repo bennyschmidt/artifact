@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Branching (v0.1.5)
+ * Module: Branching (v0.1.6)
  */
 
 const fs = require('fs');
@@ -82,6 +82,19 @@ function branch ({ name, isDelete = false } = {}) {
       path.join(branchRemotePath, 'manifest.json'),
       JSON.stringify({ commits: initialCommits }, null, 2)
     );
+  }
+
+  if (initialCommits.length > 0) {
+    const sourceBranchPath = path.join(localHistoryPath, depJson.active.branch);
+
+    for (const hash of initialCommits) {
+      const srcFile = path.join(sourceBranchPath, `${hash}.json`);
+      const destFile = path.join(branchLocalPath, `${hash}.json`);
+
+      if (fs.existsSync(srcFile)) {
+        fs.copyFileSync(srcFile, destFile);
+      }
+    }
   }
 
   return `Created branch "${name}".`;
@@ -188,7 +201,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.1.5',
+  __libraryVersion: '0.1.6',
   __libraryAPIName: 'Branching',
   branch,
   checkout,
