@@ -1,12 +1,13 @@
 /**
  * dep - Modern version control.
- * Module: Setup (v0.1.4)
+ * Module: Setup (v0.1.5)
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const pkg = require('../package.json');
+const { remote } = require('../contributions');
 
 const DEP_HOST = pkg.depConfig.host || 'http://localhost:1337';
 
@@ -113,9 +114,9 @@ function init (directoryPath = process.cwd()) {
      const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
 
      depJson.configuration.personalAccessToken = providedToken;
-     depJson.remote = `${handle}/${repo}`;
 
      fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+     remote(`${handle}/${repo}`);
    }
 
    const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));

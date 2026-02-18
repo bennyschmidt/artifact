@@ -2,7 +2,7 @@
 
 /**
  * dep - Modern version control.
- * CLI (v0.1.4)
+ * CLI (v0.1.5)
  */
 
 const dep = require('../index.js');

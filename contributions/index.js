@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Contributions (v0.1.4)
+ * Module: Contributions (v0.1.5)
  */
 
 const fs = require('fs');
@@ -23,7 +23,7 @@ function remote (input) {
     throw new Error('No dep repository found.');
   }
 
-  const manifest = JSON.parse(fs.readFileSync(depPath, 'utf8'));
+  const depJson = JSON.parse(fs.readFileSync(depPath, 'utf8'));
 
   if (input) {
     let finalUrl = input;
@@ -32,11 +32,11 @@ function remote (input) {
       finalUrl = `${DEP_HOST}/${input}`;
     }
 
-    manifest.remote = finalUrl;
-    fs.writeFileSync(depPath, JSON.stringify(manifest, null, 2));
+    depJson.remote = finalUrl;
+    fs.writeFileSync(depPath, JSON.stringify(depJson, null, 2));
   }
 
-  return manifest.remote;
+  return depJson.remote;
 }
 
 /**
