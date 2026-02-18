@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Contributions (v0.1.3)
+ * Module: Contributions (v0.1.4)
  */
 
 const fs = require('fs');

@@ -2,7 +2,7 @@
 
 /**
  * dep - Modern version control.
- * CLI (v0.1.3)
+ * CLI (v0.1.4)
  */
 
 const dep = require('../index.js');
@@ -27,7 +27,7 @@ async function run() {
         }
 
         const tokenIndex = args.indexOf('--token');
-        const cliToken = tokenIndex !== -1 ? args[tokenIndex + 1];
+        const cliToken = (tokenIndex !== -1) && args[tokenIndex + 1];
 
         console.log(await dep.clone(args[0], cliToken));
 
