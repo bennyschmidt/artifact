@@ -1,4 +1,4 @@
-# dep-vcs
+# dep
 
 **dep** is a modern and efficient version control system designed for simplicity and transparency. It tracks changes as discrete state snapshots and synchronizes seamlessly the network.
 
