@@ -1,0 +1,148 @@
+#!/usr/bin/env node
+
+/**
+ * dep - Simple version control
+ * CLI Binary (v0.0.1)
+ */
+
+const dep = require('../index.js');
+
+const [,, command, ...args] = process.argv;
+
+async function run() {
+  try {
+    switch (command) {
+      case 'init':
+        console.log(dep.init(args[0]));
+
+        break;
+
+      case 'clone':
+        console.log(await dep.clone(args[0]));
+
+        break;
+
+      case 'config':
+        console.log(dep.config(args[0], args[1]));
+
+        break;
+
+      case 'status':
+        const s = dep.status();
+
+        console.log(`On branch ${s.activeBranch}`);
+        console.log(`Last commit: ${s.lastCommit || 'None'}`);
+
+        if (s.staged.length > 0) {
+          console.log('\nChanges to be committed:');
+
+          for (const file of s.staged) console.log(`  (staged): ${file}`);
+        } else {
+          console.log('\nNothing staged.');
+        }
+
+        break;
+
+      case 'add':
+        if (!args[0]) throw new Error('Specify a file path to add.');
+
+        console.log(dep.add(args[0]));
+
+        break;
+
+      case 'commit':
+        if (!args[0]) throw new Error('Specify a commit message.');
+        console.log(dep.commit(args[0]));
+
+        break;
+
+      case 'branch':
+        const branches = dep.branch(args[0]);
+
+        if (Array.isArray(branches)) {
+          for (const b of branches) console.log(b);
+        } else {
+          console.log(branches);
+        }
+
+        break;
+
+      case 'checkout':
+        if (!args[0]) throw new Error('Specify a branch name.');
+
+        console.log(dep.checkout(args[0]));
+
+        break;
+
+      case 'merge':
+        if (!args[0]) throw new Error('Specify a target branch to merge.');
+
+        console.log(dep.merge(args[0]));
+
+        break;
+
+      case 'remote':
+        console.log(dep.remote(args[0]));
+
+        break;
+
+      case 'fetch':
+        console.log(await dep.fetch());
+
+        break;
+
+      case 'pull':
+        console.log(await dep.pull());
+
+        break;
+
+      case 'push':
+        console.log(await dep.push());
+
+        break;
+
+      case 'log':
+        console.log(dep.log());
+
+        break;
+
+      case 'diff':
+        console.log(dep.diff());
+        break;
+
+      case 'stash':
+        const isPop = args[0] === 'pop';
+
+        console.log(dep.stash({ pop: isPop }));
+
+        break;
+
+      case 'reset':
+        console.log(dep.reset(args[0]));
+
+        break;
+
+      case 'rm':
+        if (!args[0]) throw new Error('Specify a file path to remove.');
+
+        console.log(dep.rm(args[0]));
+
+        break;
+
+      case '--version':
+      case '-v':
+        console.log(`dep version ${dep.version}`);
+
+        break;
+
+      default:
+        console.log('Usage: dep <command> [arguments]');
+        console.log('Available commands: init, clone, status, add, commit, branch, checkout, merge, remote, fetch, pull, push, log, diff, stash, reset, rm');
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+run();

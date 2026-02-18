@@ -1,0 +1,13 @@
+# Exclude the internal engine tests
+.dep/
+
+# Exclude development configs
+.gitignore
+.npmignore
+
+# Exclude documentation assets if they are large
+# assets/diagrams/
+
+# Exclude source maps or build logs
+*.map
+npm-debug.log

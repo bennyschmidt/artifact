@@ -1,0 +1,26 @@
+{
+  "name": "dep-vcs",
+  "version": "0.0.1",
+  "description": "Efficient version control.",
+  "main": "index.js",
+  "bin": {
+    "dep": "./bin/dep.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "vcs",
+    "version-control",
+    "git-alternative",
+    "json-diff"
+  ],
+  "author": "bennyschmidt",
+  "license": "ISC",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "depConfig": {
+    "host": "https://www.gametorq.com/source"
+  }
+}
