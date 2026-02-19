@@ -2,7 +2,7 @@
 
 /**
  * dep - Modern version control.
- * CLI (v0.1.8)
+ * CLI (v0.1.9)
  */
 
 const dep = require('../index.js');
@@ -139,7 +139,37 @@ async function run() {
         break;
 
       case 'diff':
-        console.log(dep.diff());
+        const { fileDiffs, staged } = dep.diff();
+
+        if (fileDiffs.length === 0 && staged.length === 0) {
+          console.log('No changes detected.');
+
+          break;
+        }
+
+        for (const df of fileDiffs) {
+          console.log(`diff --dep a/${df.file} b/${df.file}`);
+
+          if (df.deleted) {
+            df.deleted.split('\n').forEach(line => {
+              console.log(`${RED}- ${line}${RESET}`);
+            });
+          }
+
+          if (df.added) {
+            df.added.split('\n').forEach(line => {
+              console.log(`${GREEN}+ ${line}${RESET}`);
+            });
+          }
+
+          console.log('');
+        }
+
+        if (staged.length > 0) {
+          console.log('--- Staged Changes ---');
+          staged.forEach(f => console.log(`staged: ${GREEN}${f}${RESET}`));
+        }
+
         break;
 
       case 'stash':

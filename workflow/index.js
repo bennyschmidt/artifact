@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Workflow (v0.1.8)
+ * Module: Workflow (v0.1.9)
  */
 
 const fs = require('fs');
@@ -11,7 +11,7 @@ const crypto = require('crypto');
  * Compares the working directory against the last commit and pending stage.
  */
 
-function status() {
+function status () {
   const root = process.cwd();
   const depPath = path.join(root, '.dep');
   const depJsonPath = path.join(depPath, 'dep.json');
@@ -65,64 +65,109 @@ function status() {
 
 /**
  * Updates or creates a JSON diff in the stage.json file.
- * @param {string} filePath - Path of the file to add.
- * @returns {string} Confirmation message.
+ * Implements character-precise position tracking.
  */
 
- function add (targetPath) {
-   const root = process.cwd();
-   const depPath = path.join(root, '.dep');
-   const stagePath = path.join(depPath, 'stage.json');
-   const fullPath = path.resolve(root, targetPath);
+function add(targetPath) {
+  const root = process.cwd();
+  const depPath = path.join(root, '.dep');
+  const stagePath = path.join(depPath, 'stage.json');
+  const depJsonPath = path.join(depPath, 'dep.json');
+  const fullPath = path.resolve(root, targetPath);
 
-   if (!fs.existsSync(fullPath)) {
-     throw new Error(`Path does not exist: ${targetPath}`);
-   }
+  if (!fs.existsSync(fullPath)) {
+    throw new Error(`Path does not exist: ${targetPath}`);
+  }
 
-   let stage = { changes: {} };
+  let stage = { changes: {} };
 
-   if (fs.existsSync(stagePath)) {
-     stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
-   }
+  if (fs.existsSync(stagePath)) {
+    stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
+  }
 
-   const stats = fs.statSync(fullPath);
+  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+  const getStateByHash = require('../utils/getStateByHash');
+  const activeState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
 
-   let filesToProcess = [];
+  const stats = fs.statSync(fullPath);
 
-   if (stats.isDirectory()) {
-     filesToProcess = fs.readdirSync(fullPath, { recursive: true })
-       .filter(f => {
-         const absoluteF = path.join(fullPath, f);
+  let filesToProcess = [];
 
-         return !fs.statSync(absoluteF).isDirectory() && !absoluteF.includes('.dep');
-       })
-       .map(f => {
-         const absoluteF = path.join(fullPath, f);
+  if (stats.isDirectory()) {
+    filesToProcess = fs.readdirSync(fullPath, { recursive: true })
+      .filter(f => {
+        const absoluteF = path.join(fullPath, f);
 
-         return path.relative(root, absoluteF);
-       });
-   } else {
-     filesToProcess = [path.relative(root, fullPath)];
-   }
+        return !fs.statSync(absoluteF).isDirectory() && !absoluteF.includes('.dep');
+      })
+      .map(f => path.relative(root, path.join(fullPath, f)));
+  } else {
+    filesToProcess = [path.relative(root, fullPath)];
+  }
 
-   filesToProcess.forEach(relPath => {
-     const content = fs.readFileSync(path.join(root, relPath), 'utf8');
+  for (const relPath of filesToProcess) {
+    const currentContent = fs.readFileSync(path.join(root, relPath), 'utf8');
+    const previousContent = activeState[relPath];
 
-     stage.changes[relPath] = {
-       type: 'createFile',
-       content: content
-     };
-   });
+    if (previousContent === undefined) {
+      stage.changes[relPath] = {
+        type: 'createFile',
+        content: currentContent
+      };
 
-   fs.writeFileSync(stagePath, JSON.stringify(stage, null, 2));
+      continue;
+    }
 
-   return `Added ${filesToProcess.length} file(s) to stage.`;
- }
+    if (currentContent !== previousContent) {
+      const operations = [];
+
+      let start = 0;
+
+      while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
+        start++;
+      }
+
+      let oldEnd = previousContent.length - 1;
+      let newEnd = currentContent.length - 1;
+
+      while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
+        oldEnd--;
+        newEnd--;
+      }
+
+      const deletionLength = oldEnd - start + 1;
+
+      if (deletionLength > 0) {
+        operations.push({
+          type: 'delete',
+          position: start,
+          length: deletionLength
+        });
+      }
+
+      const insertionContent = currentContent.slice(start, newEnd + 1);
+
+      if (insertionContent.length > 0) {
+        operations.push({
+          type: 'insert',
+          position: start,
+          content: insertionContent
+        });
+      }
+
+      if (operations.length > 0) {
+        stage.changes[relPath] = operations;
+      }
+    }
+  }
+
+  fs.writeFileSync(stagePath, JSON.stringify(stage, null, 2));
+
+  return `Added ${filesToProcess.length} file(s) to stage.`;
+}
 
 /**
- * Finalizes the stage into a commit file within the history directory.
- * @param {string} message - The commit message.
- * @returns {string} Confirmation message with the new hash.
+ * Finalizes the stage into a commit file.
  */
 
 function commit (message) {
@@ -141,7 +186,6 @@ function commit (message) {
   const stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
   const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
   const branch = depJson.active.branch;
-
   const timestamp = Date.now();
 
   const hash = crypto
@@ -150,9 +194,9 @@ function commit (message) {
     .digest('hex');
 
   const commitObject = {
-    hash: hash,
-    message: message,
-    timestamp: timestamp,
+    hash,
+    message,
+    timestamp,
     parent: depJson.active.parent,
     changes: stage.changes
   };
@@ -176,7 +220,7 @@ function commit (message) {
 }
 
 module.exports = {
-  __libraryVersion: '0.1.8',
+  __libraryVersion: '0.1.9',
   __libraryAPIName: 'Workflow',
   status,
   add,

@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Changes (v0.1.8)
+ * Module: Changes (v0.1.9)
  */
 
 const fs = require('fs');
@@ -53,23 +53,19 @@ function log () {
  * @returns {string} Formatted diff output.
  */
 
-function diff () {
+ function diff () {
   const root = process.cwd();
   const depPath = path.join(root, '.dep');
   const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
 
   const activeBranch = depJson.active.branch;
   const lastCommitHash = depJson.active.parent;
-
-  // Get the state as of the last commit
-
   const lastCommitState = lastCommitHash ? getStateByHash(activeBranch, lastCommitHash) : {};
 
-  // Get current working directory files (excluding .dep)
+  const currentFiles = fs.readdirSync(root, { recursive: true })
+    .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
 
-  const currentFiles = fs.readdirSync(root).filter(f => f !== '.dep' && fs.lstatSync(path.join(root, f)).isFile());
-
-  let output = '';
+  const fileDiffs = [];
 
   for (const filePath of currentFiles) {
     const fullPath = path.join(root, filePath);
@@ -77,43 +73,36 @@ function diff () {
     const previousContent = lastCommitState[filePath] || '';
 
     if (currentContent !== previousContent) {
-      output += `diff --dep a/${filePath} b/${filePath}\n`;
+      let start = 0;
 
-      const prevLines = previousContent.split('\n');
-      const currLines = currentContent.split('\n');
-
-      // Simple line-by-line comparison
-
-      for (const line of prevLines) {
-        if (!currLines.includes(line)) {
-          output += `- ${line}\n`;
-        }
+      while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
+        start++;
       }
 
-      for (const line of currLines) {
-        if (!prevLines.includes(line)) {
-          output += `+ ${line}\n`;
-        }
+      let oldEnd = previousContent.length - 1;
+      let newEnd = currentContent.length - 1;
+
+      while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
+        oldEnd--;
+        newEnd--;
       }
-      output += '\n';
+
+      fileDiffs.push({
+        file: filePath,
+        deleted: previousContent.slice(start, oldEnd + 1),
+        added: currentContent.slice(start, newEnd + 1)
+      });
     }
   }
 
   const stagePath = path.join(depPath, 'stage.json');
+  const staged = fs.existsSync(stagePath) ? Object.keys(JSON.parse(fs.readFileSync(stagePath, 'utf8')).changes) : [];
 
-  if (fs.existsSync(stagePath)) {
-    output += `--- Staged Changes ---\n`;
-    const stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
-    for (const stagedFile of Object.keys(stage.changes)) {
-      output += `staged: ${stagedFile}\n`;
-    }
-  }
-
-  return output || 'No changes detected.';
+  return { fileDiffs, staged };
 }
 
 module.exports = {
-  __libraryVersion: '0.1.8',
+  __libraryVersion: '0.1.9',
   __libraryAPIName: 'Changes',
   log,
   diff

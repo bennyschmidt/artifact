@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Setup (v0.1.8)
+ * Module: Setup (v0.1.9)
  */
 
 const fs = require('fs');
@@ -197,9 +197,9 @@ function init (directoryPath = process.cwd()) {
 
              for (const operation of changeSet) {
                if (operation.type === 'insert') {
-                 currentContent = currentContent.slice(0, operation.position) + operation.content + currentContent.slice(operation.position);
+                 currentContent = `${currentContent.slice(0, operation.position)}${operation.content}${currentContent.slice(operation.position)}`;
                } else if (operation.type === 'delete') {
-                 currentContent = currentContent.slice(0, operation.position) + currentContent.slice(operation.position + operation.length);
+                 currentContent = `${currentContent.slice(0, operation.position)}${currentContent.slice(operation.position + operation.length)}`;
                }
              }
 

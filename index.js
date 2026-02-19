@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Core Library Entry Point (v0.1.8)
+ * Core Library Entry Point (v0.1.9)
  */
 
 const Setup = require('./setup');
@@ -50,7 +50,7 @@ const dep = {
 
   // Metadata
 
-  version: '0.1.8',
+  version: '0.1.9',
   modules: [
     Setup.__libraryAPIName,
     Workflow.__libraryAPIName,
