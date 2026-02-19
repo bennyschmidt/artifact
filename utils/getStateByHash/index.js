@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Utils (v0.1.7)
+ * Module: Utils (v0.1.8)
  */
 
 const fs = require('fs');

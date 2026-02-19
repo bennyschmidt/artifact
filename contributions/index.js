@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Contributions (v0.1.7)
+ * Module: Contributions (v0.1.8)
  */
 
 const fs = require('fs');
@@ -155,7 +155,7 @@ async function pull () {
  * Uploads local JSON diffs that do not exist in the remote history.
  */
 
- async function push() {
+ async function push () {
    const depPath = path.join(process.cwd(), '.dep');
    const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
 
@@ -195,6 +195,7 @@ async function pull () {
 
    if (remoteManifest.commits.length === 0) {
      const rootManifestPath = path.join(depPath, 'root/manifest.json');
+
      if (fs.existsSync(rootManifestPath)) {
        rootData = JSON.parse(fs.readFileSync(rootManifestPath, 'utf8'));
      }
@@ -225,7 +226,7 @@ async function pull () {
 
    fs.writeFileSync(remoteManifestPath, JSON.stringify(localManifest, null, 2));
 
-   return `Pushed ${missingCommits.length} commits (including root state if applicable) to remote.`;
+   return `Pushed ${missingCommits.length} commits to remote.`;
  }
 
 module.exports = {

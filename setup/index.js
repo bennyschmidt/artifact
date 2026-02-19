@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Setup (v0.1.7)
+ * Module: Setup (v0.1.8)
  */
 
 const fs = require('fs');
