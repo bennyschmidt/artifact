@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Workflow (v0.2.0)
+ * Module: Workflow (v0.2.1)
  */
 
 const fs = require('fs');
@@ -68,7 +68,7 @@ function status () {
  * Implements character-precise position tracking.
  */
 
-function add(targetPath) {
+function add (targetPath) {
   const root = process.cwd();
   const depPath = path.join(root, '.dep');
   const stagePath = path.join(depPath, 'stage.json');
@@ -220,7 +220,7 @@ function commit (message) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.0',
+  __libraryVersion: '0.2.1',
   __libraryAPIName: 'Workflow',
   status,
   add,
