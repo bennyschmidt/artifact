@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Workflow (v0.2.1)
+ * Module: Workflow (v0.2.2)
  */
 
 const fs = require('fs');
@@ -220,7 +220,7 @@ function commit (message) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.1',
+  __libraryVersion: '0.2.2',
   __libraryAPIName: 'Workflow',
   status,
   add,

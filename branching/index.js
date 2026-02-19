@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Branching (v0.2.1)
+ * Module: Branching (v0.2.2)
  */
 
 const fs = require('fs');
@@ -105,7 +105,8 @@ function branch ({ name, isDelete = false } = {}) {
  */
 
  function checkout (branchName) {
-   const depPath = path.join(process.cwd(), '.dep');
+   const root = process.cwd();
+   const depPath = path.join(root, '.dep');
    const depJsonPath = path.join(depPath, 'dep.json');
    const branchPath = path.join(depPath, 'history/local', branchName);
 
@@ -114,12 +115,48 @@ function branch ({ name, isDelete = false } = {}) {
    }
 
    const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-   const targetState = getStateByHash(branchName, null);
    const currentState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
+
+   const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
+     .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+
+   let isDirty = false;
+
+   for (const file of allWorkDirFiles) {
+     const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+
+     if (currentContent !== currentState[file]) {
+       isDirty = true;
+
+       break;
+     }
+   }
+
+   if (!isDirty) {
+     for (const file in currentState) {
+       if (!fs.existsSync(path.join(root, file))) {
+         isDirty = true;
+
+         break;
+       }
+     }
+   }
+
+   if (isDirty) {
+     throw new Error('Your local changes would be overwritten. Commit or stash them first.');
+   }
+
+   const manifest = JSON.parse(fs.readFileSync(path.join(branchPath, 'manifest.json'), 'utf8'));
+
+   const targetHash = manifest.commits.length > 0
+     ? manifest.commits[manifest.commits.length - 1]
+     : null;
+
+   const targetState = getStateByHash(branchName, targetHash);
 
    for (const filePath of Object.keys(currentState)) {
      if (!targetState[filePath]) {
-       const fullPath = path.join(process.cwd(), filePath);
+       const fullPath = path.join(root, filePath);
 
        if (fs.existsSync(fullPath)) {
          fs.rmSync(fullPath, { recursive: true, force: true });
@@ -128,23 +165,18 @@ function branch ({ name, isDelete = false } = {}) {
    }
 
    for (const [filePath, content] of Object.entries(targetState)) {
-     const fullPath = path.join(process.cwd(), filePath);
+     const fullPath = path.join(root, filePath);
 
      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
      fs.writeFileSync(fullPath, content);
    }
 
-   const manifest = JSON.parse(fs.readFileSync(path.join(branchPath, 'manifest.json'), 'utf8'));
-
    depJson.active.branch = branchName;
-
-   depJson.active.parent = manifest.commits.length > 0
-    ? manifest.commits[manifest.commits.length - 1]
-    : null;
+   depJson.active.parent = targetHash;
 
    fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
 
-   return `Switched to branch "${branchName}". Unstaged changes preserved.`;
+   return `Switched to branch "${branchName}".`;
  }
 
 /**
@@ -201,7 +233,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.1',
+  __libraryVersion: '0.2.2',
   __libraryAPIName: 'Branching',
   branch,
   checkout,
