@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Caches (v0.2.2)
+ * Module: Caches (v0.2.3)
  */
 
 const fs = require('fs');
@@ -138,7 +138,7 @@ function stash ({ pop = false, list = false } = {}) {
     fs.unlinkSync(stagePath);
   }
 
-  checkout(depJson.active.branch);
+  checkout(depJson.active.branch, { force: true });
 
   return `Saved working directory changes to stash_${timestamp}.json and reverted to clean state.`;
 }
@@ -215,7 +215,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.2',
+  __libraryVersion: '0.2.3',
   __libraryAPIName: 'Caches',
   stash,
   reset,

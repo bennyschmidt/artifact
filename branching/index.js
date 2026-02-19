@@ -1,6 +1,6 @@
 /**
  * dep - Modern version control.
- * Module: Branching (v0.2.2)
+ * Module: Branching (v0.2.3)
  */
 
 const fs = require('fs');
@@ -104,80 +104,73 @@ function branch ({ name, isDelete = false } = {}) {
  * Updates the active pointer and reconstructs the working directory.
  */
 
- function checkout (branchName) {
-   const root = process.cwd();
-   const depPath = path.join(root, '.dep');
-   const depJsonPath = path.join(depPath, 'dep.json');
-   const branchPath = path.join(depPath, 'history/local', branchName);
+function checkout (branchName, { force = false } = {}) {
+  const root = process.cwd();
+  const depPath = path.join(root, '.dep');
+  const depJsonPath = path.join(depPath, 'dep.json');
+  const branchPath = path.join(depPath, 'history/local', branchName);
 
-   if (!fs.existsSync(branchPath)) {
-     branch({ name: branchName });
-   }
+  if (!fs.existsSync(branchPath)) {
+    branch({ name: branchName });
+  }
 
-   const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-   const currentState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
+  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+  const currentState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
 
-   const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
-     .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+  if (!force) {
+    const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
+      .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
 
-   let isDirty = false;
+    let isDirty = false;
+    for (const file of allWorkDirFiles) {
+      const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+      if (currentContent !== currentState[file]) {
+        isDirty = true;
+        break;
+      }
+    }
 
-   for (const file of allWorkDirFiles) {
-     const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+    if (!isDirty) {
+      for (const file in currentState) {
+        if (!fs.existsSync(path.join(root, file))) {
+          isDirty = true;
+          break;
+        }
+      }
+    }
 
-     if (currentContent !== currentState[file]) {
-       isDirty = true;
+    if (isDirty) {
+      throw new Error('Your local changes would be overwritten by checkout. Please commit or stash them.');
+    }
+  }
 
-       break;
-     }
-   }
+  const manifest = JSON.parse(fs.readFileSync(path.join(branchPath, 'manifest.json'), 'utf8'));
 
-   if (!isDirty) {
-     for (const file in currentState) {
-       if (!fs.existsSync(path.join(root, file))) {
-         isDirty = true;
+  const targetHash = manifest.commits.length > 0
+    ? manifest.commits[manifest.commits.length - 1]
+    : null;
 
-         break;
-       }
-     }
-   }
+  const targetState = getStateByHash(branchName, targetHash);
 
-   if (isDirty) {
-     throw new Error('Your local changes would be overwritten. Commit or stash them first.');
-   }
+  for (const filePath of Object.keys(currentState)) {
+    if (!targetState[filePath]) {
+      const fullPath = path.join(root, filePath);
+      if (fs.existsSync(fullPath)) fs.rmSync(fullPath, { recursive: true, force: true });
+    }
+  }
 
-   const manifest = JSON.parse(fs.readFileSync(path.join(branchPath, 'manifest.json'), 'utf8'));
+  for (const [filePath, content] of Object.entries(targetState)) {
+    const fullPath = path.join(root, filePath);
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, content);
+  }
 
-   const targetHash = manifest.commits.length > 0
-     ? manifest.commits[manifest.commits.length - 1]
-     : null;
+  depJson.active.branch = branchName;
+  depJson.active.parent = targetHash;
+  fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
 
-   const targetState = getStateByHash(branchName, targetHash);
-
-   for (const filePath of Object.keys(currentState)) {
-     if (!targetState[filePath]) {
-       const fullPath = path.join(root, filePath);
-
-       if (fs.existsSync(fullPath)) {
-         fs.rmSync(fullPath, { recursive: true, force: true });
-       }
-     }
-   }
-
-   for (const [filePath, content] of Object.entries(targetState)) {
-     const fullPath = path.join(root, filePath);
-
-     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-     fs.writeFileSync(fullPath, content);
-   }
-
-   depJson.active.branch = branchName;
-   depJson.active.parent = targetHash;
-
-   fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
-
-   return `Switched to branch "${branchName}".`;
- }
+  return `Switched to branch "${branchName}".`;
+}
 
 /**
  * Performs a three-way merge. Overwrites working directory with conflicts.
@@ -233,7 +226,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.2',
+  __libraryVersion: '0.2.3',
   __libraryAPIName: 'Branching',
   branch,
   checkout,
