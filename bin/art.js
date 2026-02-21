@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * dep - Modern version control.
- * CLI (v0.2.4)
+ * art - Modern version control.
+ * CLI (v0.2.5)
  */
 
-const dep = require('../index.js');
+const art = require('../index.js');
 
 const [,, command, ...args] = process.argv;
 
@@ -17,7 +17,7 @@ async function run() {
   try {
     switch (command) {
       case 'init':
-        console.log(dep.init(args[0]));
+        console.log(art.init(args[0]));
 
         break;
 
@@ -29,12 +29,12 @@ async function run() {
         const tokenIndex = args.indexOf('--token');
         const cliToken = (tokenIndex !== -1) && args[tokenIndex + 1];
 
-        console.log(await dep.clone(args[0], cliToken));
+        console.log(await art.clone(args[0], cliToken));
 
         break;
 
       case 'config':
-        console.log(dep.config(args[0], args[1]));
+        console.log(art.config(args[0], args[1]));
 
         break;
 
@@ -45,7 +45,7 @@ async function run() {
           staged,
           modified,
           untracked
-        } = dep.status();
+        } = art.status();
 
         console.log(`On branch ${activeBranch}`);
         console.log(`Last commit: ${lastCommit || 'None'}`);
@@ -74,13 +74,13 @@ async function run() {
       case 'add':
         if (!args[0]) throw new Error('Specify a file path to add.');
 
-        console.log(dep.add(args[0]));
+        console.log(art.add(args[0]));
 
         break;
 
       case 'commit':
         if (!args[0]) throw new Error('Specify a commit message.');
-        console.log(dep.commit(args[0]));
+        console.log(art.commit(args[0]));
 
         break;
 
@@ -89,7 +89,7 @@ async function run() {
         const isDelete = deleteFlags.includes(args[0]);
         const branchName = isDelete ? args[1] : args[0];
 
-        const branches = dep.branch({ name: branchName, isDelete });
+        const branches = art.branch({ name: branchName, isDelete });
 
         if (Array.isArray(branches)) {
           for (const b of branches) console.log(b);
@@ -102,44 +102,44 @@ async function run() {
       case 'checkout':
         if (!args[0]) throw new Error('Specify a branch name.');
 
-        console.log(dep.checkout(args[0]));
+        console.log(art.checkout(args[0]));
 
         break;
 
       case 'merge':
         if (!args[0]) throw new Error('Specify a target branch to merge.');
 
-        console.log(dep.merge(args[0]));
+        console.log(art.merge(args[0]));
 
         break;
 
       case 'remote':
-        console.log(dep.remote(args[0]));
+        console.log(art.remote(args[0]));
 
         break;
 
       case 'fetch':
-        console.log(await dep.fetch());
+        console.log(await art.fetch());
 
         break;
 
       case 'pull':
-        console.log(await dep.pull());
+        console.log(await art.pull());
 
         break;
 
       case 'push':
-        console.log(await dep.push());
+        console.log(await art.push());
 
         break;
 
       case 'log':
-        console.log(dep.log());
+        console.log(art.log());
 
         break;
 
       case 'diff':
-        const { fileDiffs, staged: diffStaged } = dep.diff();
+        const { fileDiffs, staged: diffStaged } = art.diff();
 
         if (fileDiffs.length === 0 && diffStaged.length === 0) {
           console.log('No changes detected.');
@@ -148,7 +148,7 @@ async function run() {
         }
 
         for (const df of fileDiffs) {
-          console.log(`diff --dep a/${df.file} b/${df.file}`);
+          console.log(`diff --art a/${df.file} b/${df.file}`);
 
           if (df.deleted) {
             df.deleted.split('\n').forEach(line => {
@@ -175,7 +175,7 @@ async function run() {
       case 'stash':
         const isPop = args[0] === 'pop';
         const isList = args[0] === 'list';
-        const result = dep.stash({ pop: isPop, list: isList });
+        const result = art.stash({ pop: isPop, list: isList });
 
         if (isList && Array.isArray(result)) {
           if (result.length === 0) {
@@ -194,25 +194,25 @@ async function run() {
         break;
 
       case 'reset':
-        console.log(dep.reset(args[0]));
+        console.log(art.reset(args[0]));
 
         break;
 
       case 'rm':
         if (!args[0]) throw new Error('Specify a file path to remove.');
 
-        console.log(dep.rm(args[0]));
+        console.log(art.rm(args[0]));
 
         break;
 
       case '--version':
       case '-v':
-        console.log(`dep version ${dep.version}`);
+        console.log(`art version ${art.version}`);
 
         break;
 
       default:
-        console.log('Usage: dep <command> [arguments]');
+        console.log('Usage: art <command> [arguments]');
         console.log('Available commands: init, clone, status, add, commit, branch, checkout, merge, remote, fetch, pull, push, log, diff, stash, reset, rm');
     }
   } catch (error) {

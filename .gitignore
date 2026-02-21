@@ -1,8 +1,8 @@
 # Dependency directories
 node_modules/
 
-# Local dep metadata (don't track your own test repos)
-.dep/
+# Local art metadata (don't track your own test repos)
+.art/
 
 # OS metadata
 .DS_Store

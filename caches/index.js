@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Caches (v0.2.4)
+ * art - Modern version control.
+ * Module: Caches (v0.2.5)
  */
 
 const fs = require('fs');
@@ -15,10 +15,10 @@ const getStateByHash = require('../utils/getStateByHash');
 
 function stash ({ pop = false, list = false } = {}) {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const stagePath = path.join(depPath, 'stage.json');
-  const cachePath = path.join(depPath, 'cache');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(root, '.art');
+  const stagePath = path.join(artPath, 'stage.json');
+  const cachePath = path.join(artPath, 'cache');
+  const artJsonPath = path.join(artPath, 'art.json');
 
   if (list) {
     if (!fs.existsSync(cachePath)) return [];
@@ -76,11 +76,11 @@ function stash ({ pop = false, list = false } = {}) {
     return `Restored changes from ${latestStashName}.`;
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const activeState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
 
   const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
-    .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+    .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
 
   const stashChanges = {};
 
@@ -138,7 +138,7 @@ function stash ({ pop = false, list = false } = {}) {
     fs.unlinkSync(stagePath);
   }
 
-  checkout(depJson.active.branch, { force: true });
+  checkout(artJson.active.branch, { force: true });
 
   return `Saved working directory changes to stash_${timestamp}.json and reverted to clean state.`;
 }
@@ -148,9 +148,9 @@ function stash ({ pop = false, list = false } = {}) {
  */
 
 function reset (hash) {
-  const depPath = path.join(process.cwd(), '.dep');
-  const stagePath = path.join(depPath, 'stage.json');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const stagePath = path.join(artPath, 'stage.json');
+  const artJsonPath = path.join(artPath, 'art.json');
 
   if (fs.existsSync(stagePath)) {
     fs.unlinkSync(stagePath);
@@ -160,17 +160,17 @@ function reset (hash) {
     return 'Staging area cleared.';
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const branch = depJson.active.branch;
-  const branchPath = path.join(depPath, 'history/local', branch);
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const branch = artJson.active.branch;
+  const branchPath = path.join(artPath, 'history/local', branch);
   const commitPath = path.join(branchPath, `${hash}.json`);
 
   if (!fs.existsSync(commitPath)) {
     throw new Error(`Commit ${hash} not found in branch ${branch}.`);
   }
 
-  depJson.active.parent = hash;
-  fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+  artJson.active.parent = hash;
+  fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
 
   const manifestPath = path.join(branchPath, 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -191,8 +191,8 @@ function reset (hash) {
  */
 
 function rm (filePath) {
-  const depPath = path.join(process.cwd(), '.dep');
-  const stagePath = path.join(depPath, 'stage.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const stagePath = path.join(artPath, 'stage.json');
   const fullPath = path.join(process.cwd(), filePath);
 
   let stage = { changes: {} };
@@ -215,7 +215,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.4',
+  __libraryVersion: '0.2.5',
   __libraryAPIName: 'Caches',
   stash,
   reset,

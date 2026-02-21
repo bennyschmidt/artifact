@@ -1,5 +1,5 @@
 # Exclude the internal engine tests
-.dep/
+.art/
 
 # Exclude development configs
 .gitignore

@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Core Library Entry Point (v0.2.4)
+ * art - Modern version control.
+ * Core Library Entry Point (v0.2.5)
  */
 
 const Setup = require('./setup');
@@ -10,7 +10,7 @@ const Contributions = require('./contributions');
 const Changes = require('./changes');
 const Caches = require('./caches');
 
-const dep = {
+const art = {
 
   // Setup
 
@@ -50,7 +50,7 @@ const dep = {
 
   // Metadata
 
-  version: '0.2.4',
+  version: '0.2.5',
   modules: [
     Setup.__libraryAPIName,
     Workflow.__libraryAPIName,
@@ -61,4 +61,4 @@ const dep = {
   ]
 };
 
-module.exports = dep;
+module.exports = art;

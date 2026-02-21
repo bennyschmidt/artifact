@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Contributions (v0.2.4)
+ * art - Modern version control.
+ * Module: Contributions (v0.2.5)
  */
 
 const fs = require('fs');
@@ -9,34 +9,34 @@ const path = require('path');
 const pkg = require('../package.json');
 const { checkout } = require('../branching/index.js');
 
-const DEP_HOST = pkg.depConfig.host || 'http://localhost:1337';
+const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
 /**
- * Configures the single URL endpoint in dep.json for synchronization.
+ * Configures the single URL endpoint in art.json for synchronization.
  * Supports full URLs or "handle/repo" slugs.
  */
 
 function remote (input) {
-  const depPath = path.join(process.cwd(), '.dep', 'dep.json');
+  const artPath = path.join(process.cwd(), '.art', 'art.json');
 
-  if (!fs.existsSync(depPath)) {
-    throw new Error('No dep repository found.');
+  if (!fs.existsSync(artPath)) {
+    throw new Error('No art repository found.');
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depPath, 'utf8'));
+  const artJson = JSON.parse(fs.readFileSync(artPath, 'utf8'));
 
   if (input) {
     let finalUrl = input;
 
     if (input.includes('/') && !input.startsWith('http')) {
-      finalUrl = `${DEP_HOST}/${input}`;
+      finalUrl = `${ARTIFACT_HOST}/${input}`;
     }
 
-    depJson.remote = finalUrl;
-    fs.writeFileSync(depPath, JSON.stringify(depJson, null, 2));
+    artJson.remote = finalUrl;
+    fs.writeFileSync(artPath, JSON.stringify(artJson, null, 2));
   }
 
-  return depJson.remote;
+  return artJson.remote;
 }
 
 /**
@@ -44,27 +44,27 @@ function remote (input) {
  */
 
 async function fetchRemote () {
-  const depPath = path.join(process.cwd(), '.dep');
-  const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
+  const artPath = path.join(process.cwd(), '.art');
+  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
 
-  if (!depJson.remote) {
-    throw new Error('Remote URL not configured. Use "dep remote <handle>/<repo>".');
+  if (!artJson.remote) {
+    throw new Error('Remote URL not configured. Use "art remote <handle>/<repo>".');
   }
 
-  const branch = depJson.active.branch;
-  const token = depJson.configuration.personalAccessToken;
+  const branch = artJson.active.branch;
+  const token = artJson.configuration.personalAccessToken;
 
-  const remoteParts = depJson.remote.split('/');
+  const remoteParts = artJson.remote.split('/');
   const repo = remoteParts.pop();
   const handle = remoteParts.pop();
 
-  const remoteBranchPath = path.join(depPath, 'history/remote', branch);
+  const remoteBranchPath = path.join(artPath, 'history/remote', branch);
 
   if (!fs.existsSync(remoteBranchPath)) {
     fs.mkdirSync(remoteBranchPath, { recursive: true });
   }
 
-  const response = await fetch(`${DEP_HOST}/manifest`, {
+  const response = await fetch(`${ARTIFACT_HOST}/manifest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -83,7 +83,7 @@ async function fetchRemote () {
     const commitFilePath = path.join(remoteBranchPath, `${commitHash}.json`);
 
     if (!fs.existsSync(commitFilePath)) {
-      const commitResponse = await fetch(`${DEP_HOST}/commit`, {
+      const commitResponse = await fetch(`${ARTIFACT_HOST}/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,16 +115,16 @@ async function fetchRemote () {
  */
 
 async function pull () {
-  const depPath = path.join(process.cwd(), '.dep');
-  const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
-  const branch = depJson.active.branch;
+  const artPath = path.join(process.cwd(), '.art');
+  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
+  const branch = artJson.active.branch;
 
   await fetchRemote();
 
-  const remoteManifestPath = path.join(depPath, 'history/remote', branch, 'manifest.json');
+  const remoteManifestPath = path.join(artPath, 'history/remote', branch, 'manifest.json');
   const remoteManifest = JSON.parse(fs.readFileSync(remoteManifestPath, 'utf8'));
 
-  const localManifestPath = path.join(depPath, 'history/local', branch, 'manifest.json');
+  const localManifestPath = path.join(artPath, 'history/local', branch, 'manifest.json');
   const localManifest = JSON.parse(fs.readFileSync(localManifestPath, 'utf8'));
 
   const newCommits = remoteManifest.commits.filter(hash => !localManifest.commits.includes(hash));
@@ -134,11 +134,11 @@ async function pull () {
   }
 
   for (const commitHash of newCommits) {
-    const remoteCommitFile = path.join(depPath, 'history/remote', branch, `${commitHash}.json`);
+    const remoteCommitFile = path.join(artPath, 'history/remote', branch, `${commitHash}.json`);
     const remoteData = fs.readFileSync(remoteCommitFile, 'utf8');
 
     fs.writeFileSync(
-      path.join(depPath, 'history/local', branch, `${commitHash}.json`),
+      path.join(artPath, 'history/local', branch, `${commitHash}.json`),
       remoteData
     );
 
@@ -156,22 +156,22 @@ async function pull () {
  */
 
  async function push () {
-   const depPath = path.join(process.cwd(), '.dep');
-   const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
+   const artPath = path.join(process.cwd(), '.art');
+   const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
 
-   if (!depJson.remote) {
+   if (!artJson.remote) {
      throw new Error('Remote URL not configured.');
    }
 
-   const branch = depJson.active.branch;
-   const token = depJson.configuration.personalAccessToken;
-   const remoteParts = depJson.remote.split('/');
+   const branch = artJson.active.branch;
+   const token = artJson.configuration.personalAccessToken;
+   const remoteParts = artJson.remote.split('/');
    const repo = remoteParts.pop();
    const handle = remoteParts.pop();
 
-   const localManifest = JSON.parse(fs.readFileSync(path.join(depPath, 'history/local', branch, 'manifest.json'), 'utf8'));
+   const localManifest = JSON.parse(fs.readFileSync(path.join(artPath, 'history/local', branch, 'manifest.json'), 'utf8'));
 
-   const response = await fetch(`${DEP_HOST}/manifest`, {
+   const response = await fetch(`${ARTIFACT_HOST}/manifest`, {
      method: 'POST',
      headers: { 'Content-Type': 'application/json' },
      body: JSON.stringify({
@@ -194,7 +194,7 @@ async function pull () {
    let rootData = null;
 
    if (remoteManifest.commits.length === 0) {
-     const rootManifestPath = path.join(depPath, 'root/manifest.json');
+     const rootManifestPath = path.join(artPath, 'root/manifest.json');
 
      if (fs.existsSync(rootManifestPath)) {
        rootData = JSON.parse(fs.readFileSync(rootManifestPath, 'utf8'));
@@ -202,9 +202,9 @@ async function pull () {
    }
 
    for (const commitHash of missingCommits) {
-     const commitData = JSON.parse(fs.readFileSync(path.join(depPath, 'history/local', branch, `${commitHash}.json`), 'utf8'));
+     const commitData = JSON.parse(fs.readFileSync(path.join(artPath, 'history/local', branch, `${commitHash}.json`), 'utf8'));
 
-     await fetch(`${DEP_HOST}/push`, {
+     await fetch(`${ARTIFACT_HOST}/push`, {
        method: 'POST',
        headers: { 'Content-Type': 'application/json' },
        body: JSON.stringify({
@@ -222,7 +222,7 @@ async function pull () {
      rootData = null;
    }
 
-   const remoteManifestPath = path.join(depPath, 'history/remote', branch, 'manifest.json');
+   const remoteManifestPath = path.join(artPath, 'history/remote', branch, 'manifest.json');
 
    fs.writeFileSync(remoteManifestPath, JSON.stringify(localManifest, null, 2));
 

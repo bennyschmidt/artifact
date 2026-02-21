@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Workflow (v0.2.4)
+ * art - Modern version control.
+ * Module: Workflow (v0.2.5)
  */
 
 const fs = require('fs');
@@ -13,16 +13,16 @@ const crypto = require('crypto');
 
 function status () {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(root, '.art');
+  const artJsonPath = path.join(artPath, 'art.json');
 
-  if (!fs.existsSync(depJsonPath)) {
-    throw new Error('No dep repository found.');
+  if (!fs.existsSync(artJsonPath)) {
+    throw new Error('No art repository found.');
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const activeBranch = depJson.active.branch;
-  const stagePath = path.join(depPath, 'stage.json');
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const activeBranch = artJson.active.branch;
+  const stagePath = path.join(artPath, 'stage.json');
 
   let stagedFiles = {};
 
@@ -31,10 +31,10 @@ function status () {
   }
 
   const getStateByHash = require('../utils/getStateByHash');
-  const activeState = getStateByHash(activeBranch, depJson.active.parent) || {};
+  const activeState = getStateByHash(activeBranch, artJson.active.parent) || {};
 
   const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
-    .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+    .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
 
   const untracked = [];
   const modified = [];
@@ -56,7 +56,7 @@ function status () {
 
   return {
     activeBranch,
-    lastCommit: depJson.active.parent,
+    lastCommit: artJson.active.parent,
     staged: Object.keys(stagedFiles),
     modified,
     untracked
@@ -70,9 +70,9 @@ function status () {
 
 function add (targetPath) {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const stagePath = path.join(depPath, 'stage.json');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(root, '.art');
+  const stagePath = path.join(artPath, 'stage.json');
+  const artJsonPath = path.join(artPath, 'art.json');
   const fullPath = path.resolve(root, targetPath);
 
   if (!fs.existsSync(fullPath)) {
@@ -85,9 +85,9 @@ function add (targetPath) {
     stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const getStateByHash = require('../utils/getStateByHash');
-  const activeState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
+  const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
 
   const stats = fs.statSync(fullPath);
 
@@ -98,7 +98,7 @@ function add (targetPath) {
       .filter(f => {
         const absoluteF = path.join(fullPath, f);
 
-        return !fs.statSync(absoluteF).isDirectory() && !absoluteF.includes('.dep');
+        return !fs.statSync(absoluteF).isDirectory() && !absoluteF.includes('.art');
       })
       .map(f => path.relative(root, path.join(fullPath, f)));
   } else {
@@ -175,17 +175,17 @@ function commit (message) {
     throw new Error('A commit message is required.');
   }
 
-  const depPath = path.join(process.cwd(), '.dep');
-  const stagePath = path.join(depPath, 'stage.json');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const stagePath = path.join(artPath, 'stage.json');
+  const artJsonPath = path.join(artPath, 'art.json');
 
   if (!fs.existsSync(stagePath)) {
     throw new Error('Nothing to commit (stage is empty).');
   }
 
   const stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const branch = depJson.active.branch;
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const branch = artJson.active.branch;
   const timestamp = Date.now();
 
   const hash = crypto
@@ -197,11 +197,11 @@ function commit (message) {
     hash,
     message,
     timestamp,
-    parent: depJson.active.parent,
+    parent: artJson.active.parent,
     changes: stage.changes
   };
 
-  const branchHistoryDir = path.join(depPath, 'history', 'local', branch);
+  const branchHistoryDir = path.join(artPath, 'history', 'local', branch);
   const commitFilePath = path.join(branchHistoryDir, `${hash}.json`);
   const manifestPath = path.join(branchHistoryDir, 'manifest.json');
 
@@ -212,15 +212,15 @@ function commit (message) {
   manifest.commits.push(hash);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  depJson.active.parent = hash;
-  fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+  artJson.active.parent = hash;
+  fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
   fs.unlinkSync(stagePath);
 
   return `[${branch} ${hash.slice(0, 7)}] ${message}`;
 }
 
 module.exports = {
-  __libraryVersion: '0.2.4',
+  __libraryVersion: '0.2.5',
   __libraryAPIName: 'Workflow',
   status,
   add,

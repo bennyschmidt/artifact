@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Branching (v0.2.4)
+ * art - Modern version control.
+ * Module: Branching (v0.2.5)
  */
 
 const fs = require('fs');
@@ -13,10 +13,10 @@ const getStateByHash = require('../utils/getStateByHash');
  */
 
 function branch ({ name, isDelete = false } = {}) {
-  const depPath = path.join(process.cwd(), '.dep');
-  const localHistoryPath = path.join(depPath, 'history/local');
-  const remoteHistoryPath = path.join(depPath, 'history/remote');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const localHistoryPath = path.join(artPath, 'history/local');
+  const remoteHistoryPath = path.join(artPath, 'history/remote');
+  const artJsonPath = path.join(artPath, 'art.json');
 
   if (!name) {
    return fs.readdirSync(localHistoryPath).filter(f => {
@@ -40,9 +40,9 @@ function branch ({ name, isDelete = false } = {}) {
       throw new Error(`Local branch "${name}" does not exist.`);
     }
 
-    const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+    const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
 
-    if (depJson.active.branch === name) {
+    if (artJson.active.branch === name) {
       throw new Error(`Local branch "${name}" is in use and can't be deleted right now.`);
     }
 
@@ -59,8 +59,8 @@ function branch ({ name, isDelete = false } = {}) {
     throw new Error(`Local branch "${name}" already exists.`);
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const currentBranchManifest = path.join(localHistoryPath, depJson.active.branch, 'manifest.json');
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const currentBranchManifest = path.join(localHistoryPath, artJson.active.branch, 'manifest.json');
 
   let initialCommits = [];
 
@@ -85,7 +85,7 @@ function branch ({ name, isDelete = false } = {}) {
   }
 
   if (initialCommits.length > 0) {
-    const sourceBranchPath = path.join(localHistoryPath, depJson.active.branch);
+    const sourceBranchPath = path.join(localHistoryPath, artJson.active.branch);
 
     for (const hash of initialCommits) {
       const srcFile = path.join(sourceBranchPath, `${hash}.json`);
@@ -106,20 +106,20 @@ function branch ({ name, isDelete = false } = {}) {
 
 function checkout (branchName, { force = false } = {}) {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const depJsonPath = path.join(depPath, 'dep.json');
-  const branchPath = path.join(depPath, 'history/local', branchName);
+  const artPath = path.join(root, '.art');
+  const artJsonPath = path.join(artPath, 'art.json');
+  const branchPath = path.join(artPath, 'history/local', branchName);
 
   if (!fs.existsSync(branchPath)) {
     branch({ name: branchName });
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const currentState = getStateByHash(depJson.active.branch, depJson.active.parent) || {};
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const currentState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
 
   if (!force) {
     const allWorkDirFiles = fs.readdirSync(root, { recursive: true })
-      .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+      .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
 
     let isDirty = false;
     for (const file of allWorkDirFiles) {
@@ -165,9 +165,9 @@ function checkout (branchName, { force = false } = {}) {
     fs.writeFileSync(fullPath, content);
   }
 
-  depJson.active.branch = branchName;
-  depJson.active.parent = targetHash;
-  fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+  artJson.active.branch = branchName;
+  artJson.active.parent = targetHash;
+  fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
 
   return `Switched to branch "${branchName}".`;
 }
@@ -178,17 +178,17 @@ function checkout (branchName, { force = false } = {}) {
 
 function merge (targetBranch) {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
-  const activeBranch = depJson.active.branch;
+  const artPath = path.join(root, '.art');
+  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
+  const activeBranch = artJson.active.branch;
 
-  const activeManifest = JSON.parse(fs.readFileSync(path.join(depPath, `history/local/${activeBranch}/manifest.json`), 'utf8'));
-  const targetManifest = JSON.parse(fs.readFileSync(path.join(depPath, `history/local/${targetBranch}/manifest.json`), 'utf8'));
+  const activeManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${activeBranch}/manifest.json`), 'utf8'));
+  const targetManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${targetBranch}/manifest.json`), 'utf8'));
 
   const commonAncestorHash = [...activeManifest.commits].reverse().find(h => targetManifest.commits.includes(h)) || null;
 
   const baseState = commonAncestorHash ? getStateByHash(activeBranch, commonAncestorHash) : {};
-  const activeState = getStateByHash(activeBranch, depJson.active.parent);
+  const activeState = getStateByHash(activeBranch, artJson.active.parent);
   const lastTargetHash = targetManifest.commits[targetManifest.commits.length - 1];
   const targetState = getStateByHash(targetBranch, lastTargetHash);
 
@@ -220,13 +220,13 @@ function merge (targetBranch) {
 
   const stage = { changes: mergedChanges };
 
-  fs.writeFileSync(path.join(depPath, 'stage.json'), JSON.stringify(stage, null, 2));
+  fs.writeFileSync(path.join(artPath, 'stage.json'), JSON.stringify(stage, null, 2));
 
   return `Merged ${targetBranch}. Conflicts written to the stage and working directory to be resolved.`;
 }
 
 module.exports = {
-  __libraryVersion: '0.2.4',
+  __libraryVersion: '0.2.5',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

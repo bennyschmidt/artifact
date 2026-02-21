@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Changes (v0.2.4)
+ * art - Modern version control.
+ * Module: Changes (v0.2.5)
  */
 
 const fs = require('fs');
@@ -14,16 +14,16 @@ const getStateByHash = require('../utils/getStateByHash');
  */
 
 function log () {
-  const depPath = path.join(process.cwd(), '.dep');
-  const depJsonPath = path.join(depPath, 'dep.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const artJsonPath = path.join(artPath, 'art.json');
 
-  if (!fs.existsSync(depJsonPath)) {
-    throw new Error('No dep repository found.');
+  if (!fs.existsSync(artJsonPath)) {
+    throw new Error('No art repository found.');
   }
 
-  const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
-  const branch = depJson.active.branch;
-  const branchPath = path.join(depPath, 'history/local', branch);
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const branch = artJson.active.branch;
+  const branchPath = path.join(artPath, 'history/local', branch);
   const manifestPath = path.join(branchPath, 'manifest.json');
 
   if (!fs.existsSync(manifestPath)) {
@@ -55,15 +55,15 @@ function log () {
 
  function diff () {
   const root = process.cwd();
-  const depPath = path.join(root, '.dep');
-  const depJson = JSON.parse(fs.readFileSync(path.join(depPath, 'dep.json'), 'utf8'));
+  const artPath = path.join(root, '.art');
+  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
 
-  const activeBranch = depJson.active.branch;
-  const lastCommitHash = depJson.active.parent;
+  const activeBranch = artJson.active.branch;
+  const lastCommitHash = artJson.active.parent;
   const lastCommitState = lastCommitHash ? getStateByHash(activeBranch, lastCommitHash) : {};
 
   const currentFiles = fs.readdirSync(root, { recursive: true })
-    .filter(f => !f.startsWith('.dep') && !fs.statSync(path.join(root, f)).isDirectory());
+    .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
 
   const fileDiffs = [];
 
@@ -95,14 +95,14 @@ function log () {
     }
   }
 
-  const stagePath = path.join(depPath, 'stage.json');
+  const stagePath = path.join(artPath, 'stage.json');
   const staged = fs.existsSync(stagePath) ? Object.keys(JSON.parse(fs.readFileSync(stagePath, 'utf8')).changes) : [];
 
   return { fileDiffs, staged };
 }
 
 module.exports = {
-  __libraryVersion: '0.2.4',
+  __libraryVersion: '0.2.5',
   __libraryAPIName: 'Changes',
   log,
   diff

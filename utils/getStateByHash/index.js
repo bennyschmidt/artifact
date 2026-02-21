@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Utils (v0.2.4)
+ * art - Modern version control.
+ * Module: Utils (v0.2.5)
  */
 
 const fs = require('fs');
@@ -11,13 +11,13 @@ const path = require('path');
  */
 
 module.exports = (branchName, targetHash) => {
-  const depPath = path.join(process.cwd(), '.dep');
-  const rootPath = path.join(depPath, 'root/manifest.json');
+  const artPath = path.join(process.cwd(), '.art');
+  const rootPath = path.join(artPath, 'root/manifest.json');
 
   if (!fs.existsSync(rootPath)) return {};
 
   const rootManifest = JSON.parse(fs.readFileSync(rootPath, 'utf8'));
-  const branchPath = path.join(depPath, 'history/local', branchName);
+  const branchPath = path.join(artPath, 'history/local', branchName);
   const manifestPath = path.join(branchPath, 'manifest.json');
 
   if (!fs.existsSync(manifestPath)) return {};

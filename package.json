@@ -1,10 +1,10 @@
 {
-  "name": "dep-vcs",
-  "version": "0.2.4",
+  "name": "pagan-artifact",
+  "version": "0.2.5",
   "description": "Modern version control.",
   "main": "index.js",
   "bin": {
-    "dep": "./bin/dep.js"
+    "art": "./bin/art.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -20,7 +20,7 @@
   "engines": {
     "node": ">=24.11.0"
   },
-  "depConfig": {
-    "host": "https://www.gametorq.com/source"
+  "artConfig": {
+    "host": "https://www.paganartifact.com/artifact"
   }
 }

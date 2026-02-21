@@ -1,6 +1,6 @@
 /**
- * dep - Modern version control.
- * Module: Setup (v0.2.4)
+ * art - Modern version control.
+ * Module: Setup (v0.2.5)
  */
 
 const fs = require('fs');
@@ -9,14 +9,14 @@ const path = require('path');
 const pkg = require('../package.json');
 const { remote } = require('../contributions');
 
-const DEP_HOST = pkg.depConfig.host || 'http://localhost:1337';
+const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
 /**
- * Initializes the local .dep directory structure.
+ * Initializes the local .art directory structure.
  */
 
 function init (directoryPath = process.cwd()) {
-  const depDirectory = path.join(directoryPath, '.dep');
+  const artDirectory = path.join(directoryPath, '.art');
 
   const folders = [
     '',
@@ -28,19 +28,19 @@ function init (directoryPath = process.cwd()) {
     'history/remote/main'
   ];
 
-  if (fs.existsSync(depDirectory)) {
-    return `Reinitialized existing dep repository in ${depDirectory}`;
+  if (fs.existsSync(artDirectory)) {
+    return `Reinitialized existing art repository in ${artDirectory}`;
   }
 
   for (const folder of folders) {
-    const fullPath = path.join(depDirectory, folder);
+    const fullPath = path.join(artDirectory, folder);
 
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
     }
   }
 
-  const files = fs.readdirSync(directoryPath).filter(f => f !== '.dep');
+  const files = fs.readdirSync(directoryPath).filter(f => f !== '.art');
   const rootManifest = { files: [] };
 
   for (const file of files) {
@@ -55,32 +55,32 @@ function init (directoryPath = process.cwd()) {
   }
 
   fs.writeFileSync(
-    path.join(depDirectory, 'root/manifest.json'),
+    path.join(artDirectory, 'root/manifest.json'),
     JSON.stringify(rootManifest, null, 2)
   );
 
   fs.writeFileSync(
-    path.join(depDirectory, 'history/local/main/manifest.json'),
+    path.join(artDirectory, 'history/local/main/manifest.json'),
     JSON.stringify({ commits: [] }, null, 2)
   );
 
   fs.writeFileSync(
-    path.join(depDirectory, 'history/remote/main/manifest.json'),
+    path.join(artDirectory, 'history/remote/main/manifest.json'),
     JSON.stringify({ commits: [] }, null, 2)
   );
 
-  const depFile = {
+  const artFile = {
     active: { branch: 'main', parent: null },
     remote: '',
     configuration: { handle: '', personalAccessToken: '' }
   };
 
   fs.writeFileSync(
-    path.join(depDirectory, 'dep.json'),
-    JSON.stringify(depFile, null, 2)
+    path.join(artDirectory, 'art.json'),
+    JSON.stringify(artFile, null, 2)
   );
 
-  return `Initialized empty dep repository in ${depDirectory}`;
+  return `Initialized empty art repository in ${artDirectory}`;
 }
 
 /**
@@ -107,21 +107,21 @@ async function clone (repoSlug, providedToken = null) {
   process.chdir(targetPath);
 
   try {
-    const depPath = path.join(targetPath, '.dep');
-    const depJsonPath = path.join(depPath, 'dep.json');
-    const depJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+    const artPath = path.join(targetPath, '.art');
+    const artJsonPath = path.join(artPath, 'art.json');
+    const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
 
     if (providedToken) {
-     depJson.configuration.personalAccessToken = providedToken;
+     artJson.configuration.personalAccessToken = providedToken;
     }
 
-    depJson.remote = `${DEP_HOST}/${handle}/${repo}`;
+    artJson.remote = `${ARTIFACT_HOST}/${handle}/${repo}`;
 
-    fs.writeFileSync(depJsonPath, JSON.stringify(depJson, null, 2));
+    fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
 
-    const token = depJson.configuration.personalAccessToken;
+    const token = artJson.configuration.personalAccessToken;
 
-    const rootRes = await fetch(`${DEP_HOST}/manifest`, {
+    const rootRes = await fetch(`${ARTIFACT_HOST}/manifest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -142,7 +142,7 @@ async function clone (repoSlug, providedToken = null) {
 
     if (rootManifest.files) {
       fs.writeFileSync(
-        path.join(depPath, 'root/manifest.json'),
+        path.join(artPath, 'root/manifest.json'),
         JSON.stringify(rootManifest, null, 2)
       );
 
@@ -154,7 +154,7 @@ async function clone (repoSlug, providedToken = null) {
       }
     }
 
-    const historyRes = await fetch(`${DEP_HOST}/manifest`, {
+    const historyRes = await fetch(`${ARTIFACT_HOST}/manifest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -169,12 +169,12 @@ async function clone (repoSlug, providedToken = null) {
 
     const historyManifest = await historyRes.json();
     const localManifest = { commits: [] };
-    const localHistoryDir = path.join(depPath, 'history/local/main');
-    const remoteHistoryDir = path.join(depPath, 'history/remote/main');
+    const localHistoryDir = path.join(artPath, 'history/local/main');
+    const remoteHistoryDir = path.join(artPath, 'history/remote/main');
 
     if (historyManifest.commits) {
       for (const commitHash of historyManifest.commits) {
-        const commitRes = await fetch(`${DEP_HOST}/commit`, {
+        const commitRes = await fetch(`${ARTIFACT_HOST}/commit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -225,11 +225,11 @@ async function clone (repoSlug, providedToken = null) {
     fs.writeFileSync(path.join(localHistoryDir, 'manifest.json'), JSON.stringify(localManifest, null, 2));
     fs.writeFileSync(path.join(remoteHistoryDir, 'manifest.json'), JSON.stringify(localManifest, null, 2));
 
-    const updatedDepJson = JSON.parse(fs.readFileSync(depJsonPath, 'utf8'));
+    const updatedDepJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
 
     if (localManifest.commits.length > 0) {
       updatedDepJson.active.parent = localManifest.commits[localManifest.commits.length - 1];
-      fs.writeFileSync(depJsonPath, JSON.stringify(updatedDepJson, null, 2));
+      fs.writeFileSync(artJsonPath, JSON.stringify(updatedDepJson, null, 2));
     }
 
     return `Successfully cloned and replayed ${repoSlug}.`;
@@ -241,14 +241,14 @@ async function clone (repoSlug, providedToken = null) {
 }
 
 /**
- * Updates the configuration in dep.json.
+ * Updates the configuration in art.json.
  */
 
 function config (key, value) {
-  const manifestPath = path.join(process.cwd(), '.dep', 'dep.json');
+  const manifestPath = path.join(process.cwd(), '.art', 'art.json');
 
   if (!fs.existsSync(manifestPath)) {
-    throw new Error('No dep repository found.');
+    throw new Error('No art repository found.');
   }
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
