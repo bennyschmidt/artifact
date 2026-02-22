@@ -2,7 +2,7 @@
 
 /**
  * art - Modern version control.
- * CLI (v0.2.5)
+ * CLI (v0.2.6)
  */
 
 const art = require('../index.js');
@@ -44,7 +44,8 @@ async function run() {
           lastCommit,
           staged,
           modified,
-          untracked
+          untracked,
+          ignored
         } = art.status();
 
         console.log(`On branch ${activeBranch}`);
@@ -65,8 +66,13 @@ async function run() {
           untracked.forEach(f => console.log(`${RED}\t${f}${RESET}`));
         }
 
+        if (ignored && ignored.length > 0) {
+          console.log('\nIgnored files:');
+          ignored.forEach(f => console.log(`${GRAY}\t${f}${RESET}`));
+        }
+
         if (untracked.length === 0 && modified.length === 0 && staged.length === 0) {
-          console.log('Nothing to commit.');
+          console.log('\nNothing to commit, working tree clean.');
         }
 
         break;
@@ -198,6 +204,7 @@ async function run() {
 
         break;
 
+      case 'remove':
       case 'rm':
         if (!args[0]) throw new Error('Specify a file path to remove.');
 

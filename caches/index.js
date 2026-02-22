@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Caches (v0.2.5)
+ * Module: Caches (v0.2.6)
  */
 
 const fs = require('fs');
@@ -215,7 +215,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.5',
+  __libraryVersion: '0.2.6',
   __libraryAPIName: 'Caches',
   stash,
   reset,

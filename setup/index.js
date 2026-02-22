@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Setup (v0.2.5)
+ * Module: Setup (v0.2.6)
  */
 
 const fs = require('fs');
