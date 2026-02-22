@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Branching (v0.2.6)
+ * Module: Branching (v0.2.7)
  */
 
 const fs = require('fs');
@@ -226,7 +226,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.6',
+  __libraryVersion: '0.2.7',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Setup (v0.2.6)
+ * Module: Setup (v0.2.7)
  */
 
 const fs = require('fs');
@@ -8,6 +8,7 @@ const path = require('path');
 
 const pkg = require('../package.json');
 const { remote } = require('../contributions');
+const shouldIgnore = require('../utils/shouldIgnore');
 
 const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
@@ -15,73 +16,79 @@ const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
  * Initializes the local .art directory structure.
  */
 
-function init (directoryPath = process.cwd()) {
-  const artDirectory = path.join(directoryPath, '.art');
+ function init (directoryPath = process.cwd()) {
+   const artDirectory = path.join(directoryPath, '.art');
 
-  const folders = [
-    '',
-    'root',
-    'history',
-    'history/local',
-    'history/local/main',
-    'history/remote',
-    'history/remote/main'
-  ];
+   const folders = [
+     '',
+     'root',
+     'history',
+     'history/local',
+     'history/local/main',
+     'history/remote',
+     'history/remote/main'
+   ];
 
-  if (fs.existsSync(artDirectory)) {
-    return `Reinitialized existing art repository in ${artDirectory}`;
-  }
+   if (fs.existsSync(artDirectory)) {
+     return `Reinitialized existing art repository in ${artDirectory}`;
+   }
 
-  for (const folder of folders) {
-    const fullPath = path.join(artDirectory, folder);
+   for (const folder of folders) {
+     const fullPath = path.join(artDirectory, folder);
 
-    if (!fs.existsSync(fullPath)) {
-      fs.mkdirSync(fullPath, { recursive: true });
-    }
-  }
+     if (!fs.existsSync(fullPath)) {
+       fs.mkdirSync(fullPath, { recursive: true });
+     }
+   }
 
-  const files = fs.readdirSync(directoryPath).filter(f => f !== '.art');
-  const rootManifest = { files: [] };
+   const files = fs.readdirSync(directoryPath, { recursive: true })
+     .filter(f => {
+       const isInternal = f === '.art' || f.startsWith('.art' + path.sep);
 
-  for (const file of files) {
-    const fullPath = path.join(directoryPath, file);
+       return !isInternal && !shouldIgnore(f);
+     });
 
-    if (fs.lstatSync(fullPath).isFile()) {
-      rootManifest.files.push({
-        path: file,
-        content: fs.readFileSync(fullPath, 'utf8')
-      });
-    }
-  }
+   const rootManifest = { files: [] };
 
-  fs.writeFileSync(
-    path.join(artDirectory, 'root/manifest.json'),
-    JSON.stringify(rootManifest, null, 2)
-  );
+   for (const file of files) {
+     const fullPath = path.join(directoryPath, file);
 
-  fs.writeFileSync(
-    path.join(artDirectory, 'history/local/main/manifest.json'),
-    JSON.stringify({ commits: [] }, null, 2)
-  );
+     if (fs.lstatSync(fullPath).isFile()) {
+       rootManifest.files.push({
+         path: file,
+         content: fs.readFileSync(fullPath, 'utf8')
+       });
+     }
+   }
 
-  fs.writeFileSync(
-    path.join(artDirectory, 'history/remote/main/manifest.json'),
-    JSON.stringify({ commits: [] }, null, 2)
-  );
+   fs.writeFileSync(
+     path.join(artDirectory, 'root/manifest.json'),
+     JSON.stringify(rootManifest, null, 2)
+   );
 
-  const artFile = {
-    active: { branch: 'main', parent: null },
-    remote: '',
-    configuration: { handle: '', personalAccessToken: '' }
-  };
+   fs.writeFileSync(
+     path.join(artDirectory, 'history/local/main/manifest.json'),
+     JSON.stringify({ commits: [] }, null, 2)
+   );
 
-  fs.writeFileSync(
-    path.join(artDirectory, 'art.json'),
-    JSON.stringify(artFile, null, 2)
-  );
+   fs.writeFileSync(
+     path.join(artDirectory, 'history/remote/main/manifest.json'),
+     JSON.stringify({ commits: [] }, null, 2)
+   );
 
-  return `Initialized empty art repository in ${artDirectory}`;
-}
+   const artFile = {
+     active: { branch: 'main', parent: null },
+     remote: '',
+     configuration: { handle: '', personalAccessToken: '' }
+   };
+
+   fs.writeFileSync(
+     path.join(artDirectory, 'art.json'),
+     JSON.stringify(artFile, null, 2)
+   );
+
+   return `Initialized empty art repository in ${artDirectory}`;
+ }
 
 /**
  * Clones a repository by fetching manifests and commits via POST.
