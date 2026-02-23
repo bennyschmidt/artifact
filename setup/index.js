@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Setup (v0.2.8)
+ * Module: Setup (v0.2.9)
  */
 
 const fs = require('fs');
@@ -48,22 +48,55 @@ const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
        return !isInternal && !shouldIgnore(f);
      });
 
-   const rootManifest = { files: [] };
+   const rootMasterManifest = { parts: [] };
+
+   let currentPartFiles = [];
+   let currentPartChars = 0;
+
+   const MAX_PART_CHARS = 32000000;
+
+   const saveManifestPart = () => {
+     if (currentPartFiles.length === 0) return;
+
+     const partIndex = rootMasterManifest.parts.length;
+     const partName = `manifest.part.${Date.now()}.${partIndex}.json`;
+     const partPath = path.join(artDirectory, 'root', partName);
+
+     fs.writeFileSync(
+       partPath,
+       JSON.stringify({ files: currentPartFiles }, null, 2)
+     );
+
+     rootMasterManifest.parts.push(partName);
+
+     currentPartFiles = [];
+     currentPartChars = 0;
+   };
 
    for (const file of files) {
      const fullPath = path.join(directoryPath, file);
 
      if (fs.lstatSync(fullPath).isFile()) {
-       rootManifest.files.push({
+       const content = fs.readFileSync(fullPath, 'utf8');
+
+       if (currentPartChars + content.length > MAX_PART_CHARS && currentPartFiles.length > 0) {
+         saveManifestPart();
+       }
+
+       currentPartFiles.push({
          path: file,
-         content: fs.readFileSync(fullPath, 'utf8')
+         content: content
        });
+
+       currentPartChars += content.length;
      }
    }
 
+   saveManifestPart();
+
    fs.writeFileSync(
      path.join(artDirectory, 'root/manifest.json'),
-     JSON.stringify(rootManifest, null, 2)
+     JSON.stringify(rootMasterManifest, null, 2)
    );
 
    fs.writeFileSync(
@@ -87,13 +120,18 @@ const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
      JSON.stringify(artFile, null, 2)
    );
 
-   return `Initialized empty art repository in ${artDirectory}`;
+   return `Initialized empty art repository in ${artDirectory} with ${rootMasterManifest.parts.length} manifest part(s).`;
  }
 
 /**
- * Clones a repository by fetching manifests and commits via POST.
+ * Clone a repository
  * @param {string} repoSlug - The handle/repo identifier.
  * @param {string} providedToken - Optional token for authentication.
+ */
+
+ /**
+ * art - Modern version control.
+ * Module: Setup (v0.2.9) - Clone logic
  */
 
 async function clone (repoSlug, providedToken = null) {
@@ -119,7 +157,7 @@ async function clone (repoSlug, providedToken = null) {
     const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
 
     if (providedToken) {
-     artJson.configuration.personalAccessToken = providedToken;
+      artJson.configuration.personalAccessToken = providedToken;
     }
 
     artJson.remote = `${ARTIFACT_HOST}/${handle}/${repo}`;
@@ -141,19 +179,22 @@ async function clone (repoSlug, providedToken = null) {
       })
     });
 
-    if (!rootRes.ok) {
-      throw new Error(`Failed to fetch root: ${rootRes.statusText}`);
-    }
+    const masterManifest = await rootRes.json();
 
-    const rootManifest = await rootRes.json();
+    fs.writeFileSync(path.join(artPath, 'root/manifest.json'), JSON.stringify(masterManifest, null, 2));
 
-    if (rootManifest.files) {
-      fs.writeFileSync(
-        path.join(artPath, 'root/manifest.json'),
-        JSON.stringify(rootManifest, null, 2)
-      );
+    for (const partName of masterManifest.parts) {
+      const partRes = await fetch(`${ARTIFACT_HOST}/part`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle, repo, partName, ...(token && { personalAccessToken: token }) })
+      });
 
-      for (const file of rootManifest.files) {
+      const partData = await partRes.json();
+
+      fs.writeFileSync(path.join(artPath, 'root', partName), JSON.stringify(partData, null, 2));
+
+      for (const file of partData.files) {
         const workingPath = path.join(targetPath, file.path);
 
         fs.mkdirSync(path.dirname(workingPath), { recursive: true });
@@ -164,79 +205,80 @@ async function clone (repoSlug, providedToken = null) {
     const historyRes = await fetch(`${ARTIFACT_HOST}/manifest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'history',
-        handle,
-        repo,
-        branch: 'main',
-
-        ...(token && { personalAccessToken: token })
-      })
+      body: JSON.stringify({ type: 'history', handle, repo, branch: 'main', ...(token && { personalAccessToken: token }) })
     });
 
     const historyManifest = await historyRes.json();
-    const localManifest = { commits: [] };
+
     const localHistoryDir = path.join(artPath, 'history/local/main');
     const remoteHistoryDir = path.join(artPath, 'history/remote/main');
 
-    if (historyManifest.commits) {
-      for (const commitHash of historyManifest.commits) {
-        const commitRes = await fetch(`${ARTIFACT_HOST}/commit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            handle,
-            repo,
-            branch: 'main',
-            hash: commitHash,
+    for (const commitHash of historyManifest.commits) {
+      const commitRes = await fetch(`${ARTIFACT_HOST}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle, repo, branch: 'main', hash: commitHash, ...(token && { personalAccessToken: token }) })
+      });
 
-            ...(token && { personalAccessToken: token })
-          })
-        });
+      const commitMaster = await commitRes.json();
+      let fullChanges = {};
 
-        const commitDiff = await commitRes.json();
+      if (commitMaster.parts && commitMaster.parts.length > 0) {
+        for (const partName of commitMaster.parts) {
+          const partRes = await fetch(`${ARTIFACT_HOST}/commit/part`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ handle, repo, branch: 'main', partName, ...(token && { personalAccessToken: token }) })
+          });
 
-        for (const filePath of Object.keys(commitDiff.changes)) {
-          const fullPath = path.join(targetPath, filePath);
-          const changeSet = commitDiff.changes[filePath];
+          const partData = await partRes.json();
 
-          if (Array.isArray(changeSet)) {
-            let content = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
+          fs.writeFileSync(path.join(localHistoryDir, partName), JSON.stringify(partData, null, 2));
+          fs.writeFileSync(path.join(remoteHistoryDir, partName), JSON.stringify(partData, null, 2));
 
-            for (const operation of changeSet) {
-              if (operation.type === 'insert') {
-                content = `${content.slice(0, operation.position)}${operation.content}${content.slice(operation.position)}`;
-              } else if (operation.type === 'delete') {
-                content = `${content.slice(0, operation.position)}${content.slice(operation.position + operation.length)}`;
-              }
+          Object.assign(fullChanges, partData.changes);
+        }
+      } else if (commitMaster.changes) {
+        fullChanges = commitMaster.changes;
+      }
+
+      const masterContent = JSON.stringify(commitMaster, null, 2);
+
+      fs.writeFileSync(path.join(localHistoryDir, `${commitHash}.json`), masterContent);
+      fs.writeFileSync(path.join(remoteHistoryDir, `${commitHash}.json`), masterContent);
+
+      for (const [filePath, changeSet] of Object.entries(fullChanges)) {
+        const fullPath = path.join(targetPath, filePath);
+
+        if (Array.isArray(changeSet)) {
+          let content = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
+
+          for (const op of changeSet) {
+            if (op.type === 'insert') {
+              content = content.slice(0, op.position) + op.content + content.slice(op.position);
+            } else if (op.type === 'delete') {
+              content = content.slice(0, op.position) + content.slice(op.position + op.length);
             }
+          }
 
-           fs.writeFileSync(fullPath, content);
-         } else if (changeSet.type === 'createFile') {
-           fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-           fs.writeFileSync(fullPath, changeSet.content || '');
-         } else if (changeSet.type === 'deleteFile' && fs.existsSync(fullPath)) {
-           fs.unlinkSync(fullPath);
-         }
-       }
-
-       const commitContent = JSON.stringify(commitDiff, null, 2);
-
-       fs.writeFileSync(path.join(localHistoryDir, `${commitHash}.json`), commitContent);
-       fs.writeFileSync(path.join(remoteHistoryDir, `${commitHash}.json`), commitContent);
-
-       localManifest.commits.push(commitHash);
-     }
+          fs.writeFileSync(fullPath, content);
+        } else if (changeSet.type === 'createFile') {
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+          fs.writeFileSync(fullPath, changeSet.content || '');
+        } else if (changeSet.type === 'deleteFile' && fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      }
     }
 
-    fs.writeFileSync(path.join(localHistoryDir, 'manifest.json'), JSON.stringify(localManifest, null, 2));
-    fs.writeFileSync(path.join(remoteHistoryDir, 'manifest.json'), JSON.stringify(localManifest, null, 2));
+    const manifestJson = JSON.stringify({ commits: historyManifest.commits }, null, 2);
 
-    const updatedDepJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+    fs.writeFileSync(path.join(localHistoryDir, 'manifest.json'), manifestJson);
+    fs.writeFileSync(path.join(remoteHistoryDir, 'manifest.json'), manifestJson);
 
-    if (localManifest.commits.length > 0) {
-      updatedDepJson.active.parent = localManifest.commits[localManifest.commits.length - 1];
-      fs.writeFileSync(artJsonPath, JSON.stringify(updatedDepJson, null, 2));
+    if (historyManifest.commits.length > 0) {
+      artJson.active.parent = historyManifest.commits[historyManifest.commits.length - 1];
+      fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
     }
 
     return `Successfully cloned and replayed ${repoSlug}.`;

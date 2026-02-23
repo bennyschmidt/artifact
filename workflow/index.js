@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Workflow (v0.2.8)
+ * Module: Workflow (v0.2.9)
  */
 
 const fs = require('fs');
@@ -11,15 +11,39 @@ const getStateByHash = require('../utils/getStateByHash');
 const shouldIgnore = require('../utils/shouldIgnore');
 
 /**
+ * Helper to load all changes from a paginated stage directory.
+ */
+
+function getStagedChanges(artPath) {
+  const stageDir = path.join(artPath, 'stage');
+  const manifestPath = path.join(stageDir, 'manifest.json');
+
+  if (!fs.existsSync(stageDir) || !fs.existsSync(manifestPath)) {
+    return {};
+  }
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  let allChanges = {};
+
+  for (const partName of manifest.parts) {
+    const partPath = path.join(stageDir, partName);
+    if (fs.existsSync(partPath)) {
+      const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+      Object.assign(allChanges, partData.changes);
+    }
+  }
+
+  return allChanges;
+}
+
+/**
  * Compares the working directory against the last commit and pending stage.
  */
 
- function status() {
+function status () {
   const root = process.cwd();
   const artPath = path.join(root, '.art');
   const artJsonPath = path.join(artPath, 'art.json');
-  const shouldIgnore = require('../utils/shouldIgnore');
-  const getStateByHash = require('../utils/getStateByHash');
 
   if (!fs.existsSync(artJsonPath)) {
     throw new Error('No art repository found.');
@@ -27,13 +51,8 @@ const shouldIgnore = require('../utils/shouldIgnore');
 
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const activeBranch = artJson.active.branch;
-  const stagePath = path.join(artPath, 'stage.json');
 
-  let stagedFiles = {};
-  if (fs.existsSync(stagePath)) {
-    stagedFiles = JSON.parse(fs.readFileSync(stagePath, 'utf8')).changes;
-  }
-
+  const stagedFiles = getStagedChanges(artPath);
   const activeState = getStateByHash(activeBranch, artJson.active.parent) || {};
 
   const allFiles = fs.readdirSync(root, { recursive: true })
@@ -47,9 +66,7 @@ const shouldIgnore = require('../utils/shouldIgnore');
     const isStaged = !!stagedFiles[file];
     const isActive = !!activeState[file];
 
-    if (file === '.art' || file.startsWith(`.art${path.sep}`)) {
-      continue;
-    }
+    if (file === '.art' || file.startsWith(`.art${path.sep}`)) continue;
 
     const isIgnored = shouldIgnore(file);
 
@@ -62,7 +79,6 @@ const shouldIgnore = require('../utils/shouldIgnore');
       untracked.push(file);
     } else if (!isStaged && isActive) {
       const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
-
       if (currentContent !== activeState[file]) {
         modified.push(file);
       }
@@ -80,175 +96,201 @@ const shouldIgnore = require('../utils/shouldIgnore');
 }
 
 /**
- * Updates or creates a JSON diff in the stage.json file.
- * Implements character-precise position tracking.
+ * Updates or creates a JSON diff in the stage directory.
  */
 
- function add (targetPath) {
-   const root = process.cwd();
-   const artPath = path.join(root, '.art');
-   const stagePath = path.join(artPath, 'stage.json');
-   const artJsonPath = path.join(artPath, 'art.json');
-   const fullPath = path.resolve(root, targetPath);
+function add (targetPath) {
+  const MAX_PART_SIZE = 32000000;
+  const root = process.cwd();
+  const artPath = path.join(root, '.art');
+  const stageDir = path.join(artPath, 'stage');
+  const artJsonPath = path.join(artPath, 'art.json');
+  const fullPath = path.resolve(root, targetPath);
 
-   if (!fs.existsSync(fullPath)) {
-     throw new Error(`Path does not exist: ${targetPath}`);
-   }
+  if (!fs.existsSync(fullPath)) throw new Error(`Path does not exist: ${targetPath}`);
 
-   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
-   const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+  const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
+  const currentStaged = getStagedChanges(artPath);
 
-   const stats = fs.statSync(fullPath);
-   const relativeTarget = path.relative(root, fullPath);
+  const stats = fs.statSync(fullPath);
+  const relativeTarget = path.relative(root, fullPath);
 
-   if (!stats.isDirectory() && shouldIgnore(relativeTarget) && !activeState[relativeTarget]) {
-     return `${relativeTarget} is being ignored. Edit your .artignore file to remove it.`;
-   }
+  if (!stats.isDirectory() && shouldIgnore(relativeTarget) && !activeState[relativeTarget]) {
+    return `${relativeTarget} is being ignored.`;
+  }
 
-   let stage = { changes: {} };
-   if (fs.existsSync(stagePath)) {
-     stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
-   }
+  let filesToProcess = [];
 
-   let filesToProcess = [];
+  if (stats.isDirectory()) {
+    filesToProcess = fs.readdirSync(fullPath, { recursive: true })
+      .filter(f => {
+        const absF = path.join(fullPath, f);
+        const relF = path.relative(root, absF);
 
-   if (stats.isDirectory()) {
-     filesToProcess = fs.readdirSync(fullPath, { recursive: true })
-       .filter(f => {
-         const absoluteF = path.join(fullPath, f);
-         const relF = path.relative(root, absoluteF);
-         const isDir = fs.statSync(absoluteF).isDirectory();
+        return !fs.statSync(absF).isDirectory() && !relF.startsWith('.art') && (!shouldIgnore(relF) || !!activeState[relF]);
+      })
+      .map(f => path.relative(root, path.join(fullPath, f)));
+  } else {
+    filesToProcess = [relativeTarget];
+  }
 
-         if (relF.startsWith('.art') || relF.includes(`${path.sep}.art`)) return false;
+  if (filesToProcess.length === 0) return "No changes to add.";
 
-         const isTracked = !!activeState[relF];
-         const isIgnored = shouldIgnore(relF);
+  for (const relPath of filesToProcess) {
+    const currentContent = fs.readFileSync(path.join(root, relPath), 'utf8');
+    const previousContent = activeState[relPath];
 
-         return !isDir && (!isIgnored || isTracked);
-       })
-       .map(f => path.relative(root, path.join(fullPath, f)));
-   } else {
-     filesToProcess = [relativeTarget];
-   }
+    if (previousContent === undefined) {
+      currentStaged[relPath] = { type: 'createFile', content: currentContent };
+    } else if (currentContent !== previousContent) {
+      let start = 0;
 
-   if (filesToProcess.length === 0) {
-     return "No changes to add.";
-   }
+      while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
+        start++;
+      }
 
-   for (const relPath of filesToProcess) {
-     const currentContent = fs.readFileSync(path.join(root, relPath), 'utf8');
-     const previousContent = activeState[relPath];
+      let oldEnd = previousContent.length - 1;
+      let newEnd = currentContent.length - 1;
 
-     if (previousContent === undefined) {
-       stage.changes[relPath] = {
-         type: 'createFile',
-         content: currentContent
-       };
+      while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
+        oldEnd--; newEnd--;
+      }
 
-       continue;
-     }
+      const operations = [];
+      const deletionLength = oldEnd - start + 1;
 
-     if (currentContent !== previousContent) {
-       const operations = [];
-       let start = 0;
+      if (deletionLength > 0) {
+        operations.push({ type: 'delete', position: start, length: deletionLength });
+      }
 
-       while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
-         start++;
-       }
+      const insertionContent = currentContent.slice(start, newEnd + 1);
 
-       let oldEnd = previousContent.length - 1;
-       let newEnd = currentContent.length - 1;
+      if (insertionContent.length > 0) {
+        operations.push({ type: 'insert', position: start, content: insertionContent });
+      }
 
-       while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
-         oldEnd--;
-         newEnd--;
-       }
+      if (operations.length > 0) {
+        currentStaged[relPath] = operations;
+      }
+    }
+  }
 
-       const deletionLength = oldEnd - start + 1;
+  if (fs.existsSync(stageDir)) fs.rmSync(stageDir, { recursive: true, force: true });
 
-       if (deletionLength > 0) {
-         operations.push({
-           type: 'delete',
-           position: start,
-           length: deletionLength
-         });
-       }
+  fs.mkdirSync(stageDir, { recursive: true });
 
-       const insertionContent = currentContent.slice(start, newEnd + 1);
-       if (insertionContent.length > 0) {
-         operations.push({
-           type: 'insert',
-           position: start,
-           content: insertionContent
-         });
-       }
+  const stageParts = [];
 
-       if (operations.length > 0) {
-         stage.changes[relPath] = operations;
-       }
-     }
-   }
+  let currentPartChanges = {};
+  let currentSize = 0;
 
-   fs.writeFileSync(stagePath, JSON.stringify(stage, null, 2));
+  const savePart = () => {
+    const partName = `part.${stageParts.length}.json`;
 
-   return `Added ${filesToProcess.length} file(s) to stage.`;
- }
+    fs.writeFileSync(path.join(stageDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
+    stageParts.push(partName);
+    currentPartChanges = {};
+    currentSize = 0;
+  };
+
+  for (const [file, changes] of Object.entries(currentStaged)) {
+    const size = JSON.stringify(changes).length;
+
+    if (currentSize + size > MAX_PART_SIZE && Object.keys(currentPartChanges).length > 0) {
+      savePart();
+    }
+
+    currentPartChanges[file] = changes;
+    currentSize += size;
+  }
+
+  savePart();
+
+  fs.writeFileSync(path.join(stageDir, 'manifest.json'), JSON.stringify({ parts: stageParts }, null, 2));
+
+  return `Added ${filesToProcess.length} file(s) to paginated stage.`;
+}
 
 /**
- * Finalizes the stage into a commit file.
+ * Finalizes the paginated stage into a paginated commit structure.
  */
 
 function commit (message) {
-  if (!message) {
-    throw new Error('A commit message is required.');
-  }
+  if (!message) throw new Error('A commit message is required.');
 
+  const MAX_PART_SIZE = 32000000;
   const artPath = path.join(process.cwd(), '.art');
-  const stagePath = path.join(artPath, 'stage.json');
+  const stageDir = path.join(artPath, 'stage');
   const artJsonPath = path.join(artPath, 'art.json');
 
-  if (!fs.existsSync(stagePath)) {
-    throw new Error('Nothing to commit (stage is empty).');
-  }
+  if (!fs.existsSync(stageDir)) throw new Error('Nothing to commit (stage is empty).');
 
-  const stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
+  const stagedChanges = getStagedChanges(artPath);
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const branch = artJson.active.branch;
   const timestamp = Date.now();
 
-  const hash = crypto
+  const commitHash = crypto
     .createHash('sha1')
-    .update(JSON.stringify(stage.changes) + timestamp + message)
+    .update(JSON.stringify(stagedChanges) + timestamp + message)
     .digest('hex');
 
-  const commitObject = {
-    hash,
+  const branchHistoryDir = path.join(artPath, 'history', 'local', branch);
+  const commitParts = [];
+
+  let currentPartChanges = {};
+  let currentPartSize = 0;
+
+  const saveCommitPart = () => {
+    if (Object.keys(currentPartChanges).length === 0) return;
+
+    const partName = `${commitHash}.part.${commitParts.length}.json`;
+
+    fs.writeFileSync(path.join(branchHistoryDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
+    commitParts.push(partName);
+
+    currentPartChanges = {};
+    currentPartSize = 0;
+  };
+
+  for (const [filePath, changeSet] of Object.entries(stagedChanges)) {
+    const changeSize = JSON.stringify(changeSet).length;
+
+    if (currentPartSize + changeSize > MAX_PART_SIZE && Object.keys(currentPartChanges).length > 0) {
+      saveCommitPart();
+    }
+
+    currentPartChanges[filePath] = changeSet;
+    currentPartSize += changeSize;
+  }
+  saveCommitPart();
+
+  const commitMaster = {
+    hash: commitHash,
     message,
     timestamp,
     parent: artJson.active.parent,
-    changes: stage.changes
+    parts: commitParts
   };
 
-  const branchHistoryDir = path.join(artPath, 'history', 'local', branch);
-  const commitFilePath = path.join(branchHistoryDir, `${hash}.json`);
-  const manifestPath = path.join(branchHistoryDir, 'manifest.json');
+  fs.writeFileSync(path.join(branchHistoryDir, `${commitHash}.json`), JSON.stringify(commitMaster, null, 2));
 
-  fs.writeFileSync(commitFilePath, JSON.stringify(commitObject, null, 2));
+  const manifest = JSON.parse(fs.readFileSync(path.join(branchHistoryDir, 'manifest.json'), 'utf8'));
 
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.commits.push(commitHash);
+  fs.writeFileSync(path.join(branchHistoryDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-  manifest.commits.push(hash);
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-
-  artJson.active.parent = hash;
+  artJson.active.parent = commitHash;
   fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
-  fs.unlinkSync(stagePath);
 
-  return `[${branch} ${hash.slice(0, 7)}] ${message}`;
+  fs.rmSync(stageDir, { recursive: true, force: true });
+
+  return `[${branch} ${commitHash.slice(0, 7)}] ${message} (${commitParts.length} parts)`;
 }
 
 module.exports = {
-  __libraryVersion: '0.2.8',
+  __libraryVersion: '0.2.9',
   __libraryAPIName: 'Workflow',
   status,
   add,

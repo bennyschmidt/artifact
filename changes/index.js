@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Changes (v0.2.8)
+ * Module: Changes (v0.2.9)
  */
 
 const fs = require('fs');
@@ -38,11 +38,15 @@ function log () {
 
   for (let i = manifest.commits.length - 1; i >= 0; i--) {
     const hash = manifest.commits[i];
-    const commitData = JSON.parse(fs.readFileSync(path.join(branchPath, `${hash}.json`), 'utf8'));
+    const commitMasterPath = path.join(branchPath, `${hash}.json`);
 
-    output += `commit ${commitData.hash}\n`;
-    output += `Date: ${new Date(commitData.timestamp).toLocaleString()}\n`;
-    output += `\n    ${commitData.message}\n\n`;
+    if (fs.existsSync(commitMasterPath)) {
+      const commitData = JSON.parse(fs.readFileSync(commitMasterPath, 'utf8'));
+
+      output += `commit ${commitData.hash}\n`;
+      output += `Date: ${new Date(commitData.timestamp).toLocaleString()}\n`;
+      output += `\n    ${commitData.message}\n\n`;
+    }
   }
 
   return output;
@@ -50,14 +54,19 @@ function log () {
 
 /**
  * Displays line-by-line differences between working directory and the last commit/stage.
- * @returns {string} Formatted diff output.
+ * @returns {object} Formatted diff output and staged file list.
  */
 
  function diff () {
   const root = process.cwd();
   const artPath = path.join(root, '.art');
-  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
+  const artJsonPath = path.join(artPath, 'art.json');
 
+  if (!fs.existsSync(artJsonPath)) {
+    throw new Error('No art repository found.');
+  }
+
+  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const activeBranch = artJson.active.branch;
   const lastCommitHash = artJson.active.parent;
   const lastCommitState = lastCommitHash ? getStateByHash(activeBranch, lastCommitHash) : {};
@@ -95,14 +104,30 @@ function log () {
     }
   }
 
-  const stagePath = path.join(artPath, 'stage.json');
-  const staged = fs.existsSync(stagePath) ? Object.keys(JSON.parse(fs.readFileSync(stagePath, 'utf8')).changes) : [];
+  const stageDir = path.join(artPath, 'stage');
+  const stageManifestPath = path.join(stageDir, 'manifest.json');
+
+  let staged = [];
+
+  if (fs.existsSync(stageManifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(stageManifestPath, 'utf8'));
+    const stagedFilesSet = new Set();
+
+    for (const partName of manifest.parts) {
+      const partPath = path.join(stageDir, partName);
+      if (fs.existsSync(partPath)) {
+        const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+        Object.keys(partData.changes).forEach(file => stagedFilesSet.add(file));
+      }
+    }
+    staged = Array.from(stagedFilesSet);
+  }
 
   return { fileDiffs, staged };
 }
 
 module.exports = {
-  __libraryVersion: '0.2.8',
+  __libraryVersion: '0.2.9',
   __libraryAPIName: 'Changes',
   log,
   diff

@@ -2,7 +2,7 @@
 
 /**
  * art - Modern version control.
- * CLI (v0.2.8)
+ * CLI (v0.2.9)
  */
 
 const art = require('../index.js');

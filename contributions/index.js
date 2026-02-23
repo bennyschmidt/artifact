@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Contributions (v0.2.8)
+ * Module: Contributions (v0.2.9)
  */
 
 const fs = require('fs');
@@ -13,25 +13,19 @@ const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
 /**
  * Configures the single URL endpoint in art.json for synchronization.
- * Supports full URLs or "handle/repo" slugs.
  */
 
 function remote (input) {
   const artPath = path.join(process.cwd(), '.art', 'art.json');
-
-  if (!fs.existsSync(artPath)) {
-    throw new Error('No art repository found.');
-  }
+  if (!fs.existsSync(artPath)) throw new Error('No art repository found.');
 
   const artJson = JSON.parse(fs.readFileSync(artPath, 'utf8'));
 
   if (input) {
     let finalUrl = input;
-
     if (input.includes('/') && !input.startsWith('http')) {
       finalUrl = `${ARTIFACT_HOST}/${input}`;
     }
-
     artJson.remote = finalUrl;
     fs.writeFileSync(artPath, JSON.stringify(artJson, null, 2));
   }
@@ -40,16 +34,14 @@ function remote (input) {
 }
 
 /**
- * Downloads JSON diff files from the remote server via POST.
+ * Downloads paginated JSON diff files from the remote server.
  */
 
 async function fetchRemote () {
   const artPath = path.join(process.cwd(), '.art');
   const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
 
-  if (!artJson.remote) {
-    throw new Error('Remote URL not configured. Use "art remote <handle>/<repo>".');
-  }
+  if (!artJson.remote) throw new Error('Remote URL not configured.');
 
   const branch = artJson.active.branch;
   const token = artJson.configuration.personalAccessToken;
@@ -68,11 +60,7 @@ async function fetchRemote () {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'history',
-      handle,
-      repo,
-      branch,
-
+      type: 'history', handle, repo, branch,
       ...(token && { personalAccessToken: token })
     })
   });
@@ -80,38 +68,50 @@ async function fetchRemote () {
   const remoteManifest = await response.json();
 
   for (const commitHash of remoteManifest.commits) {
-    const commitFilePath = path.join(remoteBranchPath, `${commitHash}.json`);
+    const commitMasterPath = path.join(remoteBranchPath, `${commitHash}.json`);
 
-    if (!fs.existsSync(commitFilePath)) {
-      const commitResponse = await fetch(`${ARTIFACT_HOST}/commit`, {
+    if (!fs.existsSync(commitMasterPath)) {
+      const commitRes = await fetch(`${ARTIFACT_HOST}/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          handle,
-          repo,
-          branch,
-          hash: commitHash,
-
+          handle, repo, branch, hash: commitHash,
           ...(token && { personalAccessToken: token })
         })
       });
 
-      const commitDiff = await commitResponse.json();
+      const commitMaster = await commitRes.json();
 
-      fs.writeFileSync(commitFilePath, JSON.stringify(commitDiff, null, 2));
+      fs.writeFileSync(commitMasterPath, JSON.stringify(commitMaster, null, 2));
+
+      for (const partName of commitMaster.parts) {
+        const partPath = path.join(remoteBranchPath, partName);
+
+        if (!fs.existsSync(partPath)) {
+          const partRes = await fetch(`${ARTIFACT_HOST}/commit/part`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              handle, repo, branch, partName,
+              ...(token && { personalAccessToken: token })
+            })
+          });
+
+          const partData = await partRes.json();
+
+          fs.writeFileSync(partPath, JSON.stringify(partData, null, 2));
+        }
+      }
     }
   }
 
-  fs.writeFileSync(
-    path.join(remoteBranchPath, 'manifest.json'),
-    JSON.stringify(remoteManifest, null, 2)
-  );
+  fs.writeFileSync(path.join(remoteBranchPath, 'manifest.json'), JSON.stringify(remoteManifest, null, 2));
 
   return `Fetched remote history for branch: ${branch}`;
 }
 
 /**
- * Performs a fetch and applies remote JSON diffs to local branch and files.
+ * Applies remote paginated commits to local branch.
  */
 
 async function pull () {
@@ -121,11 +121,11 @@ async function pull () {
 
   await fetchRemote();
 
-  const remoteManifestPath = path.join(artPath, 'history/remote', branch, 'manifest.json');
-  const remoteManifest = JSON.parse(fs.readFileSync(remoteManifestPath, 'utf8'));
+  const remoteBranchPath = path.join(artPath, 'history/remote', branch);
+  const localBranchPath = path.join(artPath, 'history/local', branch);
 
-  const localManifestPath = path.join(artPath, 'history/local', branch, 'manifest.json');
-  const localManifest = JSON.parse(fs.readFileSync(localManifestPath, 'utf8'));
+  const remoteManifest = JSON.parse(fs.readFileSync(path.join(remoteBranchPath, 'manifest.json'), 'utf8'));
+  const localManifest = JSON.parse(fs.readFileSync(path.join(localBranchPath, 'manifest.json'), 'utf8'));
 
   const newCommits = remoteManifest.commits.filter(hash => !localManifest.commits.includes(hash));
 
@@ -134,100 +134,116 @@ async function pull () {
   }
 
   for (const commitHash of newCommits) {
-    const remoteCommitFile = path.join(artPath, 'history/remote', branch, `${commitHash}.json`);
-    const remoteData = fs.readFileSync(remoteCommitFile, 'utf8');
+    const masterData = fs.readFileSync(path.join(remoteBranchPath, `${commitHash}.json`), 'utf8');
+    const masterJson = JSON.parse(masterData);
 
-    fs.writeFileSync(
-      path.join(artPath, 'history/local', branch, `${commitHash}.json`),
-      remoteData
-    );
+    fs.writeFileSync(path.join(localBranchPath, `${commitHash}.json`), masterData);
+
+    for (const partName of masterJson.parts) {
+      const partContent = fs.readFileSync(path.join(remoteBranchPath, partName), 'utf8');
+
+      fs.writeFileSync(path.join(localBranchPath, partName), partContent);
+    }
 
     localManifest.commits.push(commitHash);
   }
 
-  fs.writeFileSync(localManifestPath, JSON.stringify(localManifest, null, 2));
+  fs.writeFileSync(path.join(localBranchPath, 'manifest.json'), JSON.stringify(localManifest, null, 2));
   checkout(branch);
 
   return `Applied ${newCommits.length} commits.`;
 }
 
 /**
- * Uploads local JSON diffs that do not exist in the remote history.
+ * Uploads local commits via the two-step /push and /commit/part flow.
  */
 
- async function push () {
-   const artPath = path.join(process.cwd(), '.art');
-   const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
+async function push () {
+  const artPath = path.join(process.cwd(), '.art');
+  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
 
-   if (!artJson.remote) {
-     throw new Error('Remote URL not configured.');
-   }
+  if (!artJson.remote) throw new Error('Remote URL not configured.');
 
-   const branch = artJson.active.branch;
-   const token = artJson.configuration.personalAccessToken;
-   const remoteParts = artJson.remote.split('/');
-   const repo = remoteParts.pop();
-   const handle = remoteParts.pop();
+  const branch = artJson.active.branch;
+  const token = artJson.configuration.personalAccessToken;
+  const remoteParts = artJson.remote.split('/');
+  const repo = remoteParts.pop();
+  const handle = remoteParts.pop();
 
-   const localManifest = JSON.parse(fs.readFileSync(path.join(artPath, 'history/local', branch, 'manifest.json'), 'utf8'));
+  const localBranchPath = path.join(artPath, 'history/local', branch);
+  const localManifest = JSON.parse(fs.readFileSync(path.join(localBranchPath, 'manifest.json'), 'utf8'));
 
-   const response = await fetch(`${ARTIFACT_HOST}/manifest`, {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({
-       type: 'history',
-       handle,
-       repo,
-       branch,
+  const response = await fetch(`${ARTIFACT_HOST}/manifest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'history', handle, repo, branch,
 
-       ...(token && { personalAccessToken: token })
-     })
-   });
+      ...(token && { personalAccessToken: token })
+    })
+  });
 
-   const remoteManifest = await response.json();
-   const missingCommits = localManifest.commits.filter(hash => !remoteManifest.commits.includes(hash));
+  const remoteManifest = await response.json();
 
-   if (missingCommits.length === 0) {
-     return 'Everything up to date.';
-   }
+  const missingCommits = localManifest.commits.filter(hash => !remoteManifest.commits.includes(hash));
 
-   let rootData = null;
+  if (missingCommits.length === 0) {
+    return 'Everything up to date.';
+  }
 
-   if (remoteManifest.commits.length === 0) {
-     const rootManifestPath = path.join(artPath, 'root/manifest.json');
+  let rootData = null;
 
-     if (fs.existsSync(rootManifestPath)) {
-       rootData = JSON.parse(fs.readFileSync(rootManifestPath, 'utf8'));
-     }
-   }
+  if (remoteManifest.commits.length === 0) {
+    const rootMasterPath = path.join(artPath, 'root/manifest.json');
 
-   for (const commitHash of missingCommits) {
-     const commitData = JSON.parse(fs.readFileSync(path.join(artPath, 'history/local', branch, `${commitHash}.json`), 'utf8'));
+    if (fs.existsSync(rootMasterPath)) {
+      const master = JSON.parse(fs.readFileSync(rootMasterPath, 'utf8'));
+      const parts = {};
 
-     await fetch(`${ARTIFACT_HOST}/push`, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({
-         handle,
-         repo,
-         branch,
-         commit: commitData,
+      for (const partName of master.parts) {
+        parts[partName] = JSON.parse(fs.readFileSync(path.join(artPath, 'root', partName), 'utf8'));
+      }
 
-         ...(rootData && { root: rootData }),
+      rootData = { master, parts };
+    }
+  }
 
-         ...(token && { personalAccessToken: token })
-       })
-     });
+  for (const commitHash of missingCommits) {
+    const commitMaster = JSON.parse(fs.readFileSync(path.join(localBranchPath, `${commitHash}.json`), 'utf8'));
 
-     rootData = null;
-   }
+    await fetch(`${ARTIFACT_HOST}/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
 
-   const remoteManifestPath = path.join(artPath, 'history/remote', branch, 'manifest.json');
+      body: JSON.stringify({
+        handle, repo, branch, commit: commitMaster,
 
-   fs.writeFileSync(remoteManifestPath, JSON.stringify(localManifest, null, 2));
+        ...(rootData && { root: rootData }),
 
-   return `Pushed ${missingCommits.length} commits to remote.`;
- }
+        ...(token && { personalAccessToken: token })
+      })
+    });
+
+    rootData = null;
+
+    for (const partName of commitMaster.parts) {
+      const partData = JSON.parse(fs.readFileSync(path.join(localBranchPath, partName), 'utf8'));
+
+      await fetch(`${ARTIFACT_HOST}/commit/part`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle, repo, branch, partName, partData,
+          ...(token && { personalAccessToken: token })
+        })
+      });
+    }
+  }
+
+  fs.writeFileSync(path.join(artPath, 'history/remote', branch, 'manifest.json'), JSON.stringify(localManifest, null, 2));
+
+  return `Pushed ${missingCommits.length} commits to remote.`;
+}
 
 module.exports = {
   __libraryVersion: pkg.version,

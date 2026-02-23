@@ -1,12 +1,14 @@
 /**
  * art - Modern version control.
- * Module: Branching (v0.2.8)
+ * Module: Branching (v0.2.9)
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const getStateByHash = require('../utils/getStateByHash');
+
+const MAX_PART_SIZE = 32000000;
 
 /**
  * Lists, creates, or deletes branches.
@@ -20,8 +22,8 @@ function branch ({ name, isDelete = false } = {}) {
 
   if (!name) {
    return fs.readdirSync(localHistoryPath).filter(f => {
-     return f !== '.DS_Store' && f !== 'desktop.ini' && f !== 'thumbs.db';
-   });
+      return f !== '.DS_Store' && f !== 'desktop.ini' && f !== 'thumbs.db';
+    });
   }
 
   const illegalRegExp = /[\/\\]/g;
@@ -60,7 +62,8 @@ function branch ({ name, isDelete = false } = {}) {
   }
 
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
-  const currentBranchManifest = path.join(localHistoryPath, artJson.active.branch, 'manifest.json');
+  const sourceBranchName = artJson.active.branch;
+  const currentBranchManifest = path.join(localHistoryPath, sourceBranchName, 'manifest.json');
 
   let initialCommits = [];
 
@@ -85,14 +88,28 @@ function branch ({ name, isDelete = false } = {}) {
   }
 
   if (initialCommits.length > 0) {
-    const sourceBranchPath = path.join(localHistoryPath, artJson.active.branch);
+    const sourceBranchPath = path.join(localHistoryPath, sourceBranchName);
 
     for (const hash of initialCommits) {
-      const srcFile = path.join(sourceBranchPath, `${hash}.json`);
-      const destFile = path.join(branchLocalPath, `${hash}.json`);
+      const masterFile = path.join(sourceBranchPath, `${hash}.json`);
 
-      if (fs.existsSync(srcFile)) {
-        fs.copyFileSync(srcFile, destFile);
+      if (fs.existsSync(masterFile)) {
+        // Copy the Master File
+        fs.copyFileSync(masterFile, path.join(branchLocalPath, `${hash}.json`));
+
+        // Detect and copy all Parts
+        const commitMaster = JSON.parse(fs.readFileSync(masterFile, 'utf8'));
+
+        if (commitMaster.parts && Array.isArray(commitMaster.parts)) {
+          for (const partName of commitMaster.parts) {
+            const srcPart = path.join(sourceBranchPath, partName);
+            const destPart = path.join(branchLocalPath, partName);
+
+            if (fs.existsSync(srcPart)) {
+              fs.copyFileSync(srcPart, destPart);
+            }
+          }
+        }
       }
     }
   }
@@ -122,10 +139,13 @@ function checkout (branchName, { force = false } = {}) {
       .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
 
     let isDirty = false;
+
     for (const file of allWorkDirFiles) {
       const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+
       if (currentContent !== currentState[file]) {
         isDirty = true;
+
         break;
       }
     }
@@ -134,6 +154,7 @@ function checkout (branchName, { force = false } = {}) {
       for (const file in currentState) {
         if (!fs.existsSync(path.join(root, file))) {
           isDirty = true;
+
           break;
         }
       }
@@ -155,12 +176,16 @@ function checkout (branchName, { force = false } = {}) {
   for (const filePath of Object.keys(currentState)) {
     if (!targetState[filePath]) {
       const fullPath = path.join(root, filePath);
-      if (fs.existsSync(fullPath)) fs.rmSync(fullPath, { recursive: true, force: true });
+
+      if (fs.existsSync(fullPath)) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      }
     }
   }
 
   for (const [filePath, content] of Object.entries(targetState)) {
     const fullPath = path.join(root, filePath);
+
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, content);
   }
@@ -176,57 +201,97 @@ function checkout (branchName, { force = false } = {}) {
  * Performs a three-way merge. Overwrites working directory with conflicts.
  */
 
-function merge (targetBranch) {
-  const root = process.cwd();
-  const artPath = path.join(root, '.art');
-  const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
-  const activeBranch = artJson.active.branch;
+ function merge (targetBranch) {
+   const root = process.cwd();
+   const artPath = path.join(root, '.art');
+   const stageDir = path.join(artPath, 'stage');
+   const artJson = JSON.parse(fs.readFileSync(path.join(artPath, 'art.json'), 'utf8'));
+   const activeBranch = artJson.active.branch;
 
-  const activeManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${activeBranch}/manifest.json`), 'utf8'));
-  const targetManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${targetBranch}/manifest.json`), 'utf8'));
+   if (fs.existsSync(stageDir)) {
+     fs.rmSync(stageDir, { recursive: true, force: true });
+   }
 
-  const commonAncestorHash = [...activeManifest.commits].reverse().find(h => targetManifest.commits.includes(h)) || null;
+   fs.mkdirSync(stageDir, { recursive: true });
 
-  const baseState = commonAncestorHash ? getStateByHash(activeBranch, commonAncestorHash) : {};
-  const activeState = getStateByHash(activeBranch, artJson.active.parent);
-  const lastTargetHash = targetManifest.commits[targetManifest.commits.length - 1];
-  const targetState = getStateByHash(targetBranch, lastTargetHash);
+   const activeManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${activeBranch}/manifest.json`), 'utf8'));
+   const targetManifest = JSON.parse(fs.readFileSync(path.join(artPath, `history/local/${targetBranch}/manifest.json`), 'utf8'));
 
-  const mergedChanges = {};
-  const allFiles = new Set([...Object.keys(activeState), ...Object.keys(targetState)]);
+   const commonAncestorHash = [...activeManifest.commits].reverse().find(h => targetManifest.commits.includes(h)) || null;
 
-  for (const filePath of allFiles) {
-    const base = baseState[filePath];
-    const active = activeState[filePath];
-    const target = targetState[filePath];
-    const fullPath = path.join(root, filePath);
+   const baseState = commonAncestorHash ? getStateByHash(activeBranch, commonAncestorHash) : {};
+   const activeState = getStateByHash(activeBranch, artJson.active.parent);
+   const lastTargetHash = targetManifest.commits[targetManifest.commits.length - 1];
+   const targetState = getStateByHash(targetBranch, lastTargetHash);
 
-    if (active === target) continue;
+   const allFiles = new Set([...Object.keys(activeState), ...Object.keys(targetState)]);
 
-    if (base === active && base !== target) {
-      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, target || '');
+   let currentPartChanges = {};
+   let currentPartSize = 0;
+   let partCount = 0;
 
-      mergedChanges[filePath] = { type: 'createFile', content: target };
-    } else if (base !== active && base !== target && active !== target) {
-      const conflictContent = `<<<<<<< active\n${active || ''}\n=======\n${target || ''}\n>>>>>>> ${targetBranch}`;
+   const saveStagePart = () => {
+     if (Object.keys(currentPartChanges).length === 0) return;
 
-      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, conflictContent);
+     const partPath = path.join(stageDir, `part.${partCount}.json`);
 
-      mergedChanges[filePath] = { type: 'createFile', content: conflictContent };
-    }
-  }
+     fs.writeFileSync(partPath, JSON.stringify({ changes: currentPartChanges }, null, 2));
+     currentPartChanges = {};
+     currentPartSize = 0;
+     partCount++;
+   };
 
-  const stage = { changes: mergedChanges };
+   for (const filePath of allFiles) {
+     const base = baseState[filePath];
+     const active = activeState[filePath];
+     const target = targetState[filePath];
+     const fullPath = path.join(root, filePath);
 
-  fs.writeFileSync(path.join(artPath, 'stage.json'), JSON.stringify(stage, null, 2));
+     if (active === target) continue;
 
-  return `Merged ${targetBranch}. Conflicts written to the stage and working directory to be resolved.`;
-}
+     let change = null;
+
+     if (base === active && base !== target) {
+       if (target === undefined) {
+          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+          change = { type: 'deleteFile' };
+       } else {
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+          fs.writeFileSync(fullPath, target);
+          change = { type: 'createFile', content: target };
+       }
+     } else if (base !== active && base !== target && active !== target) {
+       const conflictContent = `<<<<<<< active\n${active || ''}\n=======\n${target || ''}\n>>>>>>> ${targetBranch}`;
+
+       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+       fs.writeFileSync(fullPath, conflictContent);
+       change = { type: 'createFile', content: conflictContent };
+     }
+
+     if (change) {
+       const changeSize = JSON.stringify(change).length;
+
+       if (currentPartSize + changeSize > MAX_PART_SIZE) {
+         saveStagePart();
+       }
+
+       currentPartChanges[filePath] = change;
+       currentPartSize += changeSize;
+     }
+   }
+
+   saveStagePart();
+
+   fs.writeFileSync(
+     path.join(stageDir, 'manifest.json'),
+     JSON.stringify({ parts: Array.from({ length: partCount }, (_, i) => `part.${i}.json`) }, null, 2)
+   );
+
+   return `Merged ${targetBranch}. ${partCount} stage parts created. Resolve conflicts and art commit.`;
+ }
 
 module.exports = {
-  __libraryVersion: '0.2.8',
+  __libraryVersion: '0.2.9',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

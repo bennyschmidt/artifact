@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Caches (v0.2.8)
+ * Module: Caches (v0.2.9)
  */
 
 const fs = require('fs');
@@ -10,18 +10,93 @@ const { checkout } = require('../branching/index.js');
 const getStateByHash = require('../utils/getStateByHash');
 
 /**
+ * Helper to load all changes from a paginated stage directory.
+ */
+
+function getStagedChanges(artPath) {
+  const stageDir = path.join(artPath, 'stage');
+  const manifestPath = path.join(stageDir, 'manifest.json');
+
+  if (!fs.existsSync(stageDir) || !fs.existsSync(manifestPath)) {
+    return {};
+  }
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+  let allChanges = {};
+
+  for (const partName of manifest.parts) {
+    const partPath = path.join(stageDir, partName);
+
+    if (fs.existsSync(partPath)) {
+      const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+
+      Object.assign(allChanges, partData.changes);
+    }
+  }
+
+  return allChanges;
+}
+
+/**
+ * Helper to write changes to a paginated stage directory.
+ */
+
+function saveStagedChanges(artPath, changes) {
+  const MAX_PART_SIZE = 32000000;
+  const stageDir = path.join(artPath, 'stage');
+
+  if (fs.existsSync(stageDir)) {
+    fs.rmSync(stageDir, { recursive: true, force: true });
+  }
+
+  fs.mkdirSync(stageDir, { recursive: true });
+
+  const stageParts = [];
+
+  let currentPartChanges = {};
+  let currentSize = 0;
+
+  const savePart = () => {
+    const partName = `part.${stageParts.length}.json`;
+
+    fs.writeFileSync(path.join(stageDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
+    stageParts.push(partName);
+
+    currentPartChanges = {};
+    currentSize = 0;
+  };
+
+  for (const [file, changeSet] of Object.entries(changes)) {
+    const size = JSON.stringify(changeSet).length;
+
+    if (currentSize + size > MAX_PART_SIZE && Object.keys(currentPartChanges).length > 0) {
+      savePart();
+    }
+
+    currentPartChanges[file] = changeSet;
+    currentSize += size;
+  }
+
+  savePart();
+
+  fs.writeFileSync(path.join(stageDir, 'manifest.json'), JSON.stringify({ parts: stageParts }, null, 2));
+}
+
+/**
  * Moves changes to a cache folder, or restores the most recent stash.
  */
 
 function stash ({ pop = false, list = false } = {}) {
   const root = process.cwd();
   const artPath = path.join(root, '.art');
-  const stagePath = path.join(artPath, 'stage.json');
+  const stageDir = path.join(artPath, 'stage');
   const cachePath = path.join(artPath, 'cache');
   const artJsonPath = path.join(artPath, 'art.json');
 
   if (list) {
     if (!fs.existsSync(cachePath)) return [];
+
     const stashFiles = fs.readdirSync(cachePath)
       .filter(f => f.startsWith('stash_') && f.endsWith('.json'))
       .sort();
@@ -134,8 +209,8 @@ function stash ({ pop = false, list = false } = {}) {
 
   fs.writeFileSync(path.join(cachePath, `stash_${timestamp}.json`), JSON.stringify({ changes: stashChanges }, null, 2));
 
-  if (fs.existsSync(stagePath)) {
-    fs.unlinkSync(stagePath);
+  if (fs.existsSync(stageDir)) {
+    fs.rmSync(stageDir, { recursive: true, force: true });
   }
 
   checkout(artJson.active.branch, { force: true });
@@ -149,11 +224,11 @@ function stash ({ pop = false, list = false } = {}) {
 
 function reset (hash) {
   const artPath = path.join(process.cwd(), '.art');
-  const stagePath = path.join(artPath, 'stage.json');
+  const stageDir = path.join(artPath, 'stage');
   const artJsonPath = path.join(artPath, 'art.json');
 
-  if (fs.existsSync(stagePath)) {
-    fs.unlinkSync(stagePath);
+  if (fs.existsSync(stageDir)) {
+    fs.rmSync(stageDir, { recursive: true, force: true });
   }
 
   if (!hash) {
@@ -192,20 +267,15 @@ function reset (hash) {
 
 function rm (filePath) {
   const artPath = path.join(process.cwd(), '.art');
-  const stagePath = path.join(artPath, 'stage.json');
   const fullPath = path.join(process.cwd(), filePath);
 
-  let stage = { changes: {} };
+  const stage = getStagedChanges(artPath);
 
-  if (fs.existsSync(stagePath)) {
-    stage = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
-  }
-
-  stage.changes[filePath] = {
+  stage[filePath] = {
     type: 'deleteFile'
   };
 
-  fs.writeFileSync(stagePath, JSON.stringify(stage, null, 2));
+  saveStagedChanges(artPath, stage);
 
   if (fs.existsSync(fullPath)) {
     fs.unlinkSync(fullPath);
@@ -215,7 +285,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.8',
+  __libraryVersion: '0.2.9',
   __libraryAPIName: 'Caches',
   stash,
   reset,
