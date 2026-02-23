@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Caches (v0.2.9)
+ * Module: Caches (v0.3.0)
  */
 
 const fs = require('fs');
@@ -9,15 +9,16 @@ const path = require('path');
 const { checkout } = require('../branching/index.js');
 const getStateByHash = require('../utils/getStateByHash');
 
+const MAX_PART_SIZE = 32000000;
+
 /**
- * Helper to load all changes from a paginated stage directory.
+ * Helper to load all changes from a paginated directory (Stage or Stash).
  */
 
-function getStagedChanges(artPath) {
-  const stageDir = path.join(artPath, 'stage');
-  const manifestPath = path.join(stageDir, 'manifest.json');
+function getPaginatedChanges(dirPath) {
+  const manifestPath = path.join(dirPath, 'manifest.json');
 
-  if (!fs.existsSync(stageDir) || !fs.existsSync(manifestPath)) {
+  if (!fs.existsSync(dirPath) || !fs.existsSync(manifestPath)) {
     return {};
   }
 
@@ -26,8 +27,7 @@ function getStagedChanges(artPath) {
   let allChanges = {};
 
   for (const partName of manifest.parts) {
-    const partPath = path.join(stageDir, partName);
-
+    const partPath = path.join(dirPath, partName);
     if (fs.existsSync(partPath)) {
       const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
 
@@ -39,30 +39,28 @@ function getStagedChanges(artPath) {
 }
 
 /**
- * Helper to write changes to a paginated stage directory.
+ * Helper to write changes to a paginated directory.
  */
 
-function saveStagedChanges(artPath, changes) {
-  const MAX_PART_SIZE = 32000000;
-  const stageDir = path.join(artPath, 'stage');
-
-  if (fs.existsSync(stageDir)) {
-    fs.rmSync(stageDir, { recursive: true, force: true });
+function savePaginatedChanges (dirPath, changes) {
+  if (fs.existsSync(dirPath)) {
+    fs.rmSync(dirPath, { recursive: true, force: true });
   }
 
-  fs.mkdirSync(stageDir, { recursive: true });
+  fs.mkdirSync(dirPath, { recursive: true });
 
-  const stageParts = [];
+  const parts = [];
 
   let currentPartChanges = {};
   let currentSize = 0;
 
   const savePart = () => {
-    const partName = `part.${stageParts.length}.json`;
+    if (Object.keys(currentPartChanges).length === 0) return;
 
-    fs.writeFileSync(path.join(stageDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
-    stageParts.push(partName);
+    const partName = `part.${parts.length}.json`;
 
+    fs.writeFileSync(path.join(dirPath, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
+    parts.push(partName);
     currentPartChanges = {};
     currentSize = 0;
   };
@@ -79,13 +77,8 @@ function saveStagedChanges(artPath, changes) {
   }
 
   savePart();
-
-  fs.writeFileSync(path.join(stageDir, 'manifest.json'), JSON.stringify({ parts: stageParts }, null, 2));
+  fs.writeFileSync(path.join(dirPath, 'manifest.json'), JSON.stringify({ parts }, null, 2));
 }
-
-/**
- * Moves changes to a cache folder, or restores the most recent stash.
- */
 
 function stash ({ pop = false, list = false } = {}) {
   const root = process.cwd();
@@ -97,14 +90,14 @@ function stash ({ pop = false, list = false } = {}) {
   if (list) {
     if (!fs.existsSync(cachePath)) return [];
 
-    const stashFiles = fs.readdirSync(cachePath)
-      .filter(f => f.startsWith('stash_') && f.endsWith('.json'))
+    const stashDirs = fs.readdirSync(cachePath)
+      .filter(d => d.startsWith('stash_') && fs.statSync(path.join(cachePath, d)).isDirectory())
       .sort();
 
-    return stashFiles.map((file, index) => ({
-      id: `stash@{${stashFiles.length - 1 - index}}`,
-      date: new Date(parseInt(file.replace('stash_', '').replace('.json', ''))).toLocaleString(),
-      file
+    return stashDirs.map((dirName, index) => ({
+      id: `stash@{${stashDirs.length - 1 - index}}`,
+      date: new Date(parseInt(dirName.replace('stash_', ''))).toLocaleString(),
+      dirName
     }));
   }
 
@@ -112,18 +105,16 @@ function stash ({ pop = false, list = false } = {}) {
     if (!fs.existsSync(cachePath)) throw new Error('No stashes found.');
 
     const stashes = fs.readdirSync(cachePath)
-      .filter(f => f.startsWith('stash_') && f.endsWith('.json'))
+      .filter(d => d.startsWith('stash_') && fs.statSync(path.join(cachePath, d)).isDirectory())
       .sort();
 
-    if (stashes.length === 0) {
-      throw new Error('No stashes found.');
-    }
+    if (stashes.length === 0) throw new Error('No stashes found.');
 
-    const latestStashName = stashes[stashes.length - 1];
-    const latestStashPath = path.join(cachePath, latestStashName);
-    const stashData = JSON.parse(fs.readFileSync(latestStashPath, 'utf8'));
+    const latestStashDirName = stashes[stashes.length - 1];
+    const latestStashPath = path.join(cachePath, latestStashDirName);
+    const stashChanges = getPaginatedChanges(latestStashPath);
 
-    for (const [filePath, changeSet] of Object.entries(stashData.changes)) {
+    for (const [filePath, changeSet] of Object.entries(stashChanges)) {
       const fullPath = path.join(root, filePath);
 
       if (Array.isArray(changeSet)) {
@@ -146,9 +137,8 @@ function stash ({ pop = false, list = false } = {}) {
       }
     }
 
-    fs.unlinkSync(latestStashPath);
-
-    return `Restored changes from ${latestStashName}.`;
+    fs.rmSync(latestStashPath, { recursive: true, force: true });
+    return `Restored changes from ${latestStashDirName}.`;
   }
 
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
@@ -160,12 +150,16 @@ function stash ({ pop = false, list = false } = {}) {
   const stashChanges = {};
 
   for (const file of allWorkDirFiles) {
-    const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+    const fullPath = path.join(root, file);
+    const currentBuffer = fs.readFileSync(fullPath);
+    const isBinary = currentBuffer.includes(0);
+
+    const currentContent = isBinary ? null : currentBuffer.toString('utf8');
     const previousContent = activeState[file];
 
     if (previousContent === undefined) {
-      stashChanges[file] = { type: 'createFile', content: currentContent };
-    } else if (currentContent !== previousContent) {
+      stashChanges[file] = { type: 'createFile', content: isBinary ? currentBuffer.toString('base64') : currentContent };
+    } else if (currentContent !== previousContent && !isBinary) {
       let start = 0;
 
       while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
@@ -189,7 +183,9 @@ function stash ({ pop = false, list = false } = {}) {
 
       if (insCont.length > 0) ops.push({ type: 'insert', position: start, content: insCont });
 
-      if (ops.length > 0) stashChanges[file] = ops;
+      if (ops.length > 0) {
+        stashChanges[file] = ops;
+      }
     }
   }
 
@@ -199,28 +195,20 @@ function stash ({ pop = false, list = false } = {}) {
     }
   }
 
-  if (Object.keys(stashChanges).length === 0) {
-    return 'No local changes to stash.';
-  }
-
-  if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath, { recursive: true });
+  if (Object.keys(stashChanges).length === 0) return 'No local changes to stash.';
 
   const timestamp = Date.now();
+  const newStashPath = path.join(cachePath, `stash_${timestamp}`);
 
-  fs.writeFileSync(path.join(cachePath, `stash_${timestamp}.json`), JSON.stringify({ changes: stashChanges }, null, 2));
+  savePaginatedChanges(newStashPath, stashChanges);
 
   if (fs.existsSync(stageDir)) {
     fs.rmSync(stageDir, { recursive: true, force: true });
   }
-
   checkout(artJson.active.branch, { force: true });
 
-  return `Saved working directory changes to stash_${timestamp}.json and reverted to clean state.`;
+  return `Saved working directory changes to paginated stash_${timestamp} and reverted to clean state.`;
 }
-
-/**
- * Wipes the stage and moves the active parent pointer if a hash is provided.
- */
 
 function reset (hash) {
   const artPath = path.join(process.cwd(), '.art');
@@ -231,18 +219,14 @@ function reset (hash) {
     fs.rmSync(stageDir, { recursive: true, force: true });
   }
 
-  if (!hash) {
-    return 'Staging area cleared.';
-  }
+  if (!hash) return 'Staging area cleared.';
 
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const branch = artJson.active.branch;
   const branchPath = path.join(artPath, 'history/local', branch);
   const commitPath = path.join(branchPath, `${hash}.json`);
 
-  if (!fs.existsSync(commitPath)) {
-    throw new Error(`Commit ${hash} not found in branch ${branch}.`);
-  }
+  if (!fs.existsSync(commitPath)) throw new Error(`Commit ${hash} not found in branch ${branch}.`);
 
   artJson.active.parent = hash;
   fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
@@ -258,34 +242,24 @@ function reset (hash) {
 
   checkout(branch);
 
-  return `Head is now at ${hash.slice(0, 7)}. Working directory updated.`;
+  return `Branch is now at ${hash.slice(0, 7)}. Working directory updated.`;
 }
-
-/**
- * Marks a file for deletion by adding a "deleteFile" entry to the stage.
- */
 
 function rm (filePath) {
   const artPath = path.join(process.cwd(), '.art');
   const fullPath = path.join(process.cwd(), filePath);
+  const stage = getPaginatedChanges(path.join(artPath, 'stage'));
 
-  const stage = getStagedChanges(artPath);
+  stage[filePath] = { type: 'deleteFile' };
+  savePaginatedChanges(path.join(artPath, 'stage'), stage);
 
-  stage[filePath] = {
-    type: 'deleteFile'
-  };
-
-  saveStagedChanges(artPath, stage);
-
-  if (fs.existsSync(fullPath)) {
-    fs.unlinkSync(fullPath);
-  }
+  if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
 
   return `File ${filePath} marked for removal.`;
 }
 
 module.exports = {
-  __libraryVersion: '0.2.9',
+  __libraryVersion: '0.3.0',
   __libraryAPIName: 'Caches',
   stash,
   reset,

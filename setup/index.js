@@ -1,137 +1,133 @@
 /**
  * art - Modern version control.
- * Module: Setup (v0.2.9)
+ * Module: Setup (v0.3.0)
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const pkg = require('../package.json');
-const { remote } = require('../contributions');
 const shouldIgnore = require('../utils/shouldIgnore');
 
 const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
 /**
- * Initializes the local .art directory structure.
+ * Internal helper to create the .art directory tree.
  */
 
- function init (directoryPath = process.cwd()) {
-   const artDirectory = path.join(directoryPath, '.art');
+function ensureDirStructure(artDirectory) {
+  const folders = [
+    '',
+    'root',
+    'history',
+    'history/local',
+    'history/local/main',
+    'history/remote',
+    'history/remote/main'
+  ];
 
-   const folders = [
-     '',
-     'root',
-     'history',
-     'history/local',
-     'history/local/main',
-     'history/remote',
-     'history/remote/main'
-   ];
+  for (const folder of folders) {
+    const fullPath = path.join(artDirectory, folder);
 
-   if (fs.existsSync(artDirectory)) {
-     return `Reinitialized existing art repository in ${artDirectory}`;
-   }
-
-   for (const folder of folders) {
-     const fullPath = path.join(artDirectory, folder);
-
-     if (!fs.existsSync(fullPath)) {
-       fs.mkdirSync(fullPath, { recursive: true });
-     }
-   }
-
-   const files = fs.readdirSync(directoryPath, { recursive: true })
-     .filter(f => {
-       const isInternal = f === '.art' || f.startsWith('.art' + path.sep);
-
-       return !isInternal && !shouldIgnore(f);
-     });
-
-   const rootMasterManifest = { parts: [] };
-
-   let currentPartFiles = [];
-   let currentPartChars = 0;
-
-   const MAX_PART_CHARS = 32000000;
-
-   const saveManifestPart = () => {
-     if (currentPartFiles.length === 0) return;
-
-     const partIndex = rootMasterManifest.parts.length;
-     const partName = `manifest.part.${Date.now()}.${partIndex}.json`;
-     const partPath = path.join(artDirectory, 'root', partName);
-
-     fs.writeFileSync(
-       partPath,
-       JSON.stringify({ files: currentPartFiles }, null, 2)
-     );
-
-     rootMasterManifest.parts.push(partName);
-
-     currentPartFiles = [];
-     currentPartChars = 0;
-   };
-
-   for (const file of files) {
-     const fullPath = path.join(directoryPath, file);
-
-     if (fs.lstatSync(fullPath).isFile()) {
-       const content = fs.readFileSync(fullPath, 'utf8');
-
-       if (currentPartChars + content.length > MAX_PART_CHARS && currentPartFiles.length > 0) {
-         saveManifestPart();
-       }
-
-       currentPartFiles.push({
-         path: file,
-         content: content
-       });
-
-       currentPartChars += content.length;
-     }
-   }
-
-   saveManifestPart();
-
-   fs.writeFileSync(
-     path.join(artDirectory, 'root/manifest.json'),
-     JSON.stringify(rootMasterManifest, null, 2)
-   );
-
-   fs.writeFileSync(
-     path.join(artDirectory, 'history/local/main/manifest.json'),
-     JSON.stringify({ commits: [] }, null, 2)
-   );
-
-   fs.writeFileSync(
-     path.join(artDirectory, 'history/remote/main/manifest.json'),
-     JSON.stringify({ commits: [] }, null, 2)
-   );
-
-   const artFile = {
-     active: { branch: 'main', parent: null },
-     remote: '',
-     configuration: { handle: '', personalAccessToken: '' }
-   };
-
-   fs.writeFileSync(
-     path.join(artDirectory, 'art.json'),
-     JSON.stringify(artFile, null, 2)
-   );
-
-   return `Initialized empty art repository in ${artDirectory} with ${rootMasterManifest.parts.length} manifest part(s).`;
- }
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(fullPath, { recursive: true });
+    }
+  }
+}
 
 /**
- * Clone a repository
- * @param {string} repoSlug - The handle/repo identifier.
- * @param {string} providedToken - Optional token for authentication.
+ * Initializes the local .art directory structure and indexes current files.
  */
 
- /**
- * art - Modern version control.
- * Module: Setup (v0.2.9) - Clone logic
+function init (directoryPath = process.cwd()) {
+  const artDirectory = path.join(directoryPath, '.art');
+
+  if (fs.existsSync(artDirectory)) {
+    return `Reinitialized existing art repository in ${artDirectory}`;
+  }
+
+  ensureDirStructure(artDirectory);
+
+  const files = fs.readdirSync(directoryPath, { recursive: true })
+    .filter(f => {
+      const isInternal = f === '.art' || f.startsWith('.art' + path.sep);
+      return !isInternal && !shouldIgnore(f);
+    });
+
+  const rootMasterManifest = { parts: [] };
+  let currentPartFiles = [];
+  let currentPartChars = 0;
+  const MAX_PART_CHARS = 32000000;
+
+  const saveManifestPart = () => {
+    if (currentPartFiles.length === 0) return;
+
+    const partIndex = rootMasterManifest.parts.length;
+    const partName = `manifest.part.${Date.now()}.${partIndex}.json`;
+    const partPath = path.join(artDirectory, 'root', partName);
+
+    fs.writeFileSync(
+      partPath,
+      JSON.stringify({ files: currentPartFiles }, null, 2)
+    );
+
+    rootMasterManifest.parts.push(partName);
+    currentPartFiles = [];
+    currentPartChars = 0;
+  };
+
+  for (const file of files) {
+    const fullPath = path.join(directoryPath, file);
+
+    if (fs.lstatSync(fullPath).isFile()) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+
+      if (currentPartChars + content.length > MAX_PART_CHARS && currentPartFiles.length > 0) {
+        saveManifestPart();
+      }
+
+      currentPartFiles.push({
+        path: file,
+        content: content
+      });
+
+      currentPartChars += content.length;
+    }
+  }
+
+  saveManifestPart();
+
+  fs.writeFileSync(
+    path.join(artDirectory, 'root/manifest.json'),
+    JSON.stringify(rootMasterManifest, null, 2)
+  );
+
+  fs.writeFileSync(
+    path.join(artDirectory, 'history/local/main/manifest.json'),
+    JSON.stringify({ commits: [] }, null, 2)
+  );
+
+  fs.writeFileSync(
+    path.join(artDirectory, 'history/remote/main/manifest.json'),
+    JSON.stringify({ commits: [] }, null, 2)
+  );
+
+  const artFile = {
+    active: { branch: 'main', parent: null },
+    remote: '',
+    configuration: { handle: '', personalAccessToken: '' }
+  };
+
+  fs.writeFileSync(
+    path.join(artDirectory, 'art.json'),
+    JSON.stringify(artFile, null, 2)
+  );
+
+  return `Initialized empty art repository in ${artDirectory}.`;
+}
+
+/**
+ * Clone a repository and replay history.
  */
 
 async function clone (repoSlug, providedToken = null) {
@@ -148,19 +144,20 @@ async function clone (repoSlug, providedToken = null) {
   }
 
   fs.mkdirSync(targetPath, { recursive: true });
-  init(targetPath);
+
+  const artPath = path.join(targetPath, '.art');
+
+  ensureDirStructure(artPath);
   process.chdir(targetPath);
 
   try {
-    const artPath = path.join(targetPath, '.art');
     const artJsonPath = path.join(artPath, 'art.json');
-    const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
 
-    if (providedToken) {
-      artJson.configuration.personalAccessToken = providedToken;
-    }
-
-    artJson.remote = `${ARTIFACT_HOST}/${handle}/${repo}`;
+    const artJson = {
+      active: { branch: 'main', parent: null },
+      remote: `${ARTIFACT_HOST}/${handle}/${repo}`,
+      configuration: { handle: '', personalAccessToken: providedToken || '' }
+    };
 
     fs.writeFileSync(artJsonPath, JSON.stringify(artJson, null, 2));
 
@@ -174,7 +171,6 @@ async function clone (repoSlug, providedToken = null) {
         handle,
         repo,
         branch: 'main',
-
         ...(token && { personalAccessToken: token })
       })
     });
@@ -191,12 +187,10 @@ async function clone (repoSlug, providedToken = null) {
       });
 
       const partData = await partRes.json();
-
       fs.writeFileSync(path.join(artPath, 'root', partName), JSON.stringify(partData, null, 2));
 
       for (const file of partData.files) {
         const workingPath = path.join(targetPath, file.path);
-
         fs.mkdirSync(path.dirname(workingPath), { recursive: true });
         fs.writeFileSync(workingPath, file.content);
       }
@@ -209,7 +203,6 @@ async function clone (repoSlug, providedToken = null) {
     });
 
     const historyManifest = await historyRes.json();
-
     const localHistoryDir = path.join(artPath, 'history/local/main');
     const remoteHistoryDir = path.join(artPath, 'history/remote/main');
 
@@ -217,10 +210,19 @@ async function clone (repoSlug, providedToken = null) {
       const commitRes = await fetch(`${ARTIFACT_HOST}/commit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle, repo, branch: 'main', hash: commitHash, ...(token && { personalAccessToken: token }) })
+        body: JSON.stringify({
+          handle,
+          repo,
+          branch: 'main',
+          hash: commitHash,
+
+          ...(token && { personalAccessToken: token
+          })
+        })
       });
 
       const commitMaster = await commitRes.json();
+
       let fullChanges = {};
 
       if (commitMaster.parts && commitMaster.parts.length > 0) {
@@ -232,7 +234,6 @@ async function clone (repoSlug, providedToken = null) {
           });
 
           const partData = await partRes.json();
-
           fs.writeFileSync(path.join(localHistoryDir, partName), JSON.stringify(partData, null, 2));
           fs.writeFileSync(path.join(remoteHistoryDir, partName), JSON.stringify(partData, null, 2));
 
@@ -252,7 +253,6 @@ async function clone (repoSlug, providedToken = null) {
 
         if (Array.isArray(changeSet)) {
           let content = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
-
           for (const op of changeSet) {
             if (op.type === 'insert') {
               content = content.slice(0, op.position) + op.content + content.slice(op.position);
@@ -260,7 +260,6 @@ async function clone (repoSlug, providedToken = null) {
               content = content.slice(0, op.position) + content.slice(op.position + op.length);
             }
           }
-
           fs.writeFileSync(fullPath, content);
         } else if (changeSet.type === 'createFile') {
           fs.mkdirSync(path.dirname(fullPath), { recursive: true });
@@ -292,8 +291,7 @@ async function clone (repoSlug, providedToken = null) {
 /**
  * Updates the configuration in art.json.
  */
-
-function config (key, value) {
+function config(key, value) {
   const manifestPath = path.join(process.cwd(), '.art', 'art.json');
 
   if (!fs.existsSync(manifestPath)) {
@@ -304,7 +302,6 @@ function config (key, value) {
 
   if (key && value !== undefined) {
     manifest.configuration[key] = value;
-
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   }
 
@@ -316,5 +313,6 @@ module.exports = {
   __libraryAPIName: 'Setup',
   init,
   clone,
-  config
+  config,
+  ensureDirStructure
 };

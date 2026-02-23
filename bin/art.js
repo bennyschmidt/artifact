@@ -2,10 +2,11 @@
 
 /**
  * art - Modern version control.
- * CLI (v0.2.9)
+ * CLI (v0.3.0)
  */
 
 const art = require('../index.js');
+const path = require('path');
 
 const [,, command, ...args] = process.argv;
 
@@ -69,7 +70,19 @@ async function run() {
 
         if (ignored && ignored.length > 0) {
           console.log('\nIgnored files:');
-          ignored.forEach(f => console.log(`${GRAY}\t${f}${RESET}`));
+
+          const compressedIgnored = new Set();
+
+          ignored.forEach(f => {
+            const parts = f.split(path.sep);
+            if (parts.length > 1) {
+              compressedIgnored.add(`${parts[0]}${path.sep}`);
+            } else {
+              compressedIgnored.add(f);
+            }
+          });
+
+          compressedIgnored.forEach(f => console.log(`${GRAY}\t${f}${RESET}`));
         }
 
         if (untracked.length === 0 && modified.length === 0 && staged.length === 0) {

@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Workflow (v0.2.9)
+ * Module: Workflow (v0.3.0)
  */
 
 const fs = require('fs');
@@ -9,6 +9,8 @@ const crypto = require('crypto');
 
 const getStateByHash = require('../utils/getStateByHash');
 const shouldIgnore = require('../utils/shouldIgnore');
+
+const MAX_PART_SIZE = 32000000;
 
 /**
  * Helper to load all changes from a paginated stage directory.
@@ -27,8 +29,10 @@ function getStagedChanges(artPath) {
 
   for (const partName of manifest.parts) {
     const partPath = path.join(stageDir, partName);
+
     if (fs.existsSync(partPath)) {
       const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+
       Object.assign(allChanges, partData.changes);
     }
   }
@@ -72,6 +76,7 @@ function status () {
 
     if (isIgnored && !isActive && !isStaged) {
       ignored.push(file);
+
       continue;
     }
 
@@ -79,6 +84,7 @@ function status () {
       untracked.push(file);
     } else if (!isStaged && isActive) {
       const currentContent = fs.readFileSync(path.join(root, file), 'utf8');
+
       if (currentContent !== activeState[file]) {
         modified.push(file);
       }
@@ -100,14 +106,15 @@ function status () {
  */
 
 function add (targetPath) {
-  const MAX_PART_SIZE = 32000000;
   const root = process.cwd();
   const artPath = path.join(root, '.art');
   const stageDir = path.join(artPath, 'stage');
   const artJsonPath = path.join(artPath, 'art.json');
   const fullPath = path.resolve(root, targetPath);
 
-  if (!fs.existsSync(fullPath)) throw new Error(`Path does not exist: ${targetPath}`);
+  if (!fs.existsSync(fullPath)) {
+    throw new Error(`Path does not exist: ${targetPath}`);
+  }
 
   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
   const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
@@ -290,7 +297,7 @@ function commit (message) {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.9',
+  __libraryVersion: '0.3.0',
   __libraryAPIName: 'Workflow',
   status,
   add,

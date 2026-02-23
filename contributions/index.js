@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Contributions (v0.2.9)
+ * Module: Contributions (v0.3.0)
  */
 
 const fs = require('fs');
@@ -60,7 +60,10 @@ async function fetchRemote () {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'history', handle, repo, branch,
+      type: 'history',
+      handle,
+      repo,
+      branch,
       ...(token && { personalAccessToken: token })
     })
   });
@@ -171,20 +174,22 @@ async function push () {
   const handle = remoteParts.pop();
 
   const localBranchPath = path.join(artPath, 'history/local', branch);
+  const remoteBranchPath = path.join(artPath, 'history/remote', branch);
   const localManifest = JSON.parse(fs.readFileSync(path.join(localBranchPath, 'manifest.json'), 'utf8'));
 
   const response = await fetch(`${ARTIFACT_HOST}/manifest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'history', handle, repo, branch,
-
+      type: 'history',
+      handle,
+      repo,
+      branch,
       ...(token && { personalAccessToken: token })
     })
   });
 
   const remoteManifest = await response.json();
-
   const missingCommits = localManifest.commits.filter(hash => !remoteManifest.commits.includes(hash));
 
   if (missingCommits.length === 0) {
@@ -208,13 +213,17 @@ async function push () {
     }
   }
 
+  const currentRemoteManifestPath = path.join(remoteBranchPath, 'manifest.json');
+  const currentRemoteManifest = fs.existsSync(currentRemoteManifestPath)
+    ? JSON.parse(fs.readFileSync(currentRemoteManifestPath, 'utf8'))
+    : { commits: [] };
+
   for (const commitHash of missingCommits) {
     const commitMaster = JSON.parse(fs.readFileSync(path.join(localBranchPath, `${commitHash}.json`), 'utf8'));
 
-    await fetch(`${ARTIFACT_HOST}/push`, {
+    const pushRes = await fetch(`${ARTIFACT_HOST}/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-
       body: JSON.stringify({
         handle, repo, branch, commit: commitMaster,
 
@@ -224,12 +233,14 @@ async function push () {
       })
     });
 
+    if (!pushRes.ok) throw new Error(`Server rejected push for commit ${commitHash}`);
+
     rootData = null;
 
     for (const partName of commitMaster.parts) {
       const partData = JSON.parse(fs.readFileSync(path.join(localBranchPath, partName), 'utf8'));
 
-      await fetch(`${ARTIFACT_HOST}/commit/part`, {
+      const partRes = await fetch(`${ARTIFACT_HOST}/commit/part`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -237,10 +248,13 @@ async function push () {
           ...(token && { personalAccessToken: token })
         })
       });
-    }
-  }
 
-  fs.writeFileSync(path.join(artPath, 'history/remote', branch, 'manifest.json'), JSON.stringify(localManifest, null, 2));
+      if (!partRes.ok) throw new Error(`Server failed to receive part ${partName}`);
+    }
+
+    currentRemoteManifest.commits.push(commitHash);
+    fs.writeFileSync(currentRemoteManifestPath, JSON.stringify(currentRemoteManifest, null, 2));
+  }
 
   return `Pushed ${missingCommits.length} commits to remote.`;
 }

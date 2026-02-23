@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Branching (v0.2.9)
+ * Module: Branching (v0.3.0)
  */
 
 const fs = require('fs');
@@ -26,6 +26,7 @@ function branch ({ name, isDelete = false } = {}) {
     });
   }
 
+  const normalizedName = name.toLowerCase();
   const illegalRegExp = /[\/\\]/g;
   const controlRegExp = /[\x00-\x1f\x80-\x9f]/g;
   const reservedRegExp = /^\.+$/;
@@ -89,20 +90,25 @@ function branch ({ name, isDelete = false } = {}) {
 
   if (initialCommits.length > 0) {
     const sourceBranchPath = path.join(localHistoryPath, sourceBranchName);
+    const sourceRemotePath = path.join(remoteHistoryPath, sourceBranchName);
 
     for (const hash of initialCommits) {
-      const masterFile = path.join(sourceBranchPath, `${hash}.json`);
+      let masterFile = path.join(sourceBranchPath, `${hash}.json`);
+      let currentSrcDir = sourceBranchPath;
+
+      if (!fs.existsSync(masterFile)) {
+        masterFile = path.join(sourceRemotePath, `${hash}.json`);
+        currentSrcDir = sourceRemotePath;
+      }
 
       if (fs.existsSync(masterFile)) {
-        // Copy the Master File
         fs.copyFileSync(masterFile, path.join(branchLocalPath, `${hash}.json`));
 
-        // Detect and copy all Parts
         const commitMaster = JSON.parse(fs.readFileSync(masterFile, 'utf8'));
 
         if (commitMaster.parts && Array.isArray(commitMaster.parts)) {
           for (const partName of commitMaster.parts) {
-            const srcPart = path.join(sourceBranchPath, partName);
+            const srcPart = path.join(currentSrcDir, partName);
             const destPart = path.join(branchLocalPath, partName);
 
             if (fs.existsSync(srcPart)) {
@@ -287,11 +293,11 @@ function checkout (branchName, { force = false } = {}) {
      JSON.stringify({ parts: Array.from({ length: partCount }, (_, i) => `part.${i}.json`) }, null, 2)
    );
 
-   return `Merged ${targetBranch}. ${partCount} stage parts created. Resolve conflicts and art commit.`;
+   return `Merged ${targetBranch}.`;
  }
 
 module.exports = {
-  __libraryVersion: '0.2.9',
+  __libraryVersion: '0.3.0',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

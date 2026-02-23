@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Changes (v0.2.9)
+ * Module: Changes (v0.3.0)
  */
 
 const fs = require('fs');
@@ -34,8 +34,6 @@ function log () {
 
   let output = `Branch: ${branch}\n\n`;
 
-  // Display commits in reverse chronological order
-
   for (let i = manifest.commits.length - 1; i >= 0; i--) {
     const hash = manifest.commits[i];
     const commitMasterPath = path.join(branchPath, `${hash}.json`);
@@ -57,7 +55,7 @@ function log () {
  * @returns {object} Formatted diff output and staged file list.
  */
 
- function diff () {
+function diff () {
   const root = process.cwd();
   const artPath = path.join(root, '.art');
   const artJsonPath = path.join(artPath, 'art.json');
@@ -78,10 +76,13 @@ function log () {
 
   for (const filePath of currentFiles) {
     const fullPath = path.join(root, filePath);
-    const currentContent = fs.readFileSync(fullPath, 'utf8');
+    const currentBuffer = fs.readFileSync(fullPath);
+    const isBinary = currentBuffer.includes(0);
+
+    const currentContent = isBinary ? null : currentBuffer.toString('utf8');
     const previousContent = lastCommitState[filePath] || '';
 
-    if (currentContent !== previousContent) {
+    if (!isBinary && currentContent !== previousContent) {
       let start = 0;
 
       while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
@@ -101,6 +102,12 @@ function log () {
         deleted: previousContent.slice(start, oldEnd + 1),
         added: currentContent.slice(start, newEnd + 1)
       });
+    } else if (isBinary) {
+      const prevHash = lastCommitState[filePath] ? 'exists' : 'null';
+
+      if (prevHash === 'null') {
+        fileDiffs.push({ file: filePath, added: '<Binary Data>', deleted: '' });
+      }
     }
   }
 
@@ -115,8 +122,10 @@ function log () {
 
     for (const partName of manifest.parts) {
       const partPath = path.join(stageDir, partName);
+
       if (fs.existsSync(partPath)) {
         const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+
         Object.keys(partData.changes).forEach(file => stagedFilesSet.add(file));
       }
     }
@@ -127,7 +136,7 @@ function log () {
 }
 
 module.exports = {
-  __libraryVersion: '0.2.9',
+  __libraryVersion: '0.3.0',
   __libraryAPIName: 'Changes',
   log,
   diff
