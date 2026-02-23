@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Core Library Entry Point (v0.2.7)
+ * Core Library Entry Point (v0.2.8)
  */
 
 const Setup = require('./setup');
@@ -50,7 +50,7 @@ const art = {
 
   // Metadata
 
-  version: '0.2.7',
+  version: '0.2.8',
   modules: [
     Setup.__libraryAPIName,
     Workflow.__libraryAPIName,

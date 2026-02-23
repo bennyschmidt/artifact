@@ -2,7 +2,7 @@
 
 /**
  * art - Modern version control.
- * CLI (v0.2.7)
+ * CLI (v0.2.8)
  */
 
 const art = require('../index.js');
@@ -12,6 +12,7 @@ const [,, command, ...args] = process.argv;
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
 const RESET = '\x1b[0m';
+const GRAY = '\x1b[90m';
 
 async function run() {
   try {
