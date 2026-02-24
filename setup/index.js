@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Setup (v0.3.0)
+ * Module: Setup (v0.3.1)
  */
 
 const fs = require('fs');
@@ -10,6 +10,7 @@ const pkg = require('../package.json');
 const shouldIgnore = require('../utils/shouldIgnore');
 
 const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
+const MAX_PART_CHARS = 32000000;
 
 /**
  * Internal helper to create the .art directory tree.
@@ -43,7 +44,7 @@ function init (directoryPath = process.cwd()) {
   const artDirectory = path.join(directoryPath, '.art');
 
   if (fs.existsSync(artDirectory)) {
-    return `Reinitialized existing art repository in ${artDirectory}`;
+    return `Reinitialized existing art repository in ${artDirectory}.`;
   }
 
   ensureDirStructure(artDirectory);
@@ -51,19 +52,20 @@ function init (directoryPath = process.cwd()) {
   const files = fs.readdirSync(directoryPath, { recursive: true })
     .filter(f => {
       const isInternal = f === '.art' || f.startsWith('.art' + path.sep);
+
       return !isInternal && !shouldIgnore(f);
     });
 
   const rootMasterManifest = { parts: [] };
+
   let currentPartFiles = [];
   let currentPartChars = 0;
-  const MAX_PART_CHARS = 32000000;
 
   const saveManifestPart = () => {
     if (currentPartFiles.length === 0) return;
 
     const partIndex = rootMasterManifest.parts.length;
-    const partName = `manifest.part.${Date.now()}.${partIndex}.json`;
+    const partName = `manifest.part.${partIndex}.json`;
     const partPath = path.join(artDirectory, 'root', partName);
 
     fs.writeFileSync(
@@ -187,10 +189,12 @@ async function clone (repoSlug, providedToken = null) {
       });
 
       const partData = await partRes.json();
+
       fs.writeFileSync(path.join(artPath, 'root', partName), JSON.stringify(partData, null, 2));
 
       for (const file of partData.files) {
         const workingPath = path.join(targetPath, file.path);
+
         fs.mkdirSync(path.dirname(workingPath), { recursive: true });
         fs.writeFileSync(workingPath, file.content);
       }

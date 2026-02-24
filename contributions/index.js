@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Contributions (v0.3.0)
+ * Module: Contributions (v0.3.1)
  */
 
 const fs = require('fs');

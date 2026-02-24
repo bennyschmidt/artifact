@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Workflow (v0.3.0)
+ * Module: Workflow (v0.3.1)
  */
 
 const fs = require('fs');
@@ -105,119 +105,124 @@ function status () {
  * Updates or creates a JSON diff in the stage directory.
  */
 
-function add (targetPath) {
-  const root = process.cwd();
-  const artPath = path.join(root, '.art');
-  const stageDir = path.join(artPath, 'stage');
-  const artJsonPath = path.join(artPath, 'art.json');
-  const fullPath = path.resolve(root, targetPath);
+ function add (targetPath) {
+   const root = process.cwd();
+   const artPath = path.join(root, '.art');
+   const stageDir = path.join(artPath, 'stage');
+   const artJsonPath = path.join(artPath, 'art.json');
+   const fullPath = path.resolve(root, targetPath);
 
-  if (!fs.existsSync(fullPath)) {
-    throw new Error(`Path does not exist: ${targetPath}`);
-  }
+   if (!fs.existsSync(fullPath)) {
+     throw new Error(`Path does not exist: ${targetPath}`);
+   }
 
-  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
-  const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
-  const currentStaged = getStagedChanges(artPath);
+   const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
+   const activeState = getStateByHash(artJson.active.branch, artJson.active.parent) || {};
+   const currentStaged = getStagedChanges(artPath);
 
-  const stats = fs.statSync(fullPath);
-  const relativeTarget = path.relative(root, fullPath);
+   const stats = fs.statSync(fullPath);
+   const relativeTarget = path.relative(root, fullPath);
 
-  if (!stats.isDirectory() && shouldIgnore(relativeTarget) && !activeState[relativeTarget]) {
-    return `${relativeTarget} is being ignored.`;
-  }
+   if (!stats.isDirectory() && shouldIgnore(relativeTarget) && !activeState[relativeTarget]) {
+     return `${relativeTarget} is being ignored.`;
+   }
 
-  let filesToProcess = [];
+   let filesToProcess = [];
 
-  if (stats.isDirectory()) {
-    filesToProcess = fs.readdirSync(fullPath, { recursive: true })
-      .filter(f => {
-        const absF = path.join(fullPath, f);
-        const relF = path.relative(root, absF);
+   if (stats.isDirectory()) {
+     filesToProcess = fs.readdirSync(fullPath, { recursive: true })
+       .filter(f => {
+         const absF = path.join(fullPath, f);
+         const relF = path.relative(root, absF);
 
-        return !fs.statSync(absF).isDirectory() && !relF.startsWith('.art') && (!shouldIgnore(relF) || !!activeState[relF]);
-      })
-      .map(f => path.relative(root, path.join(fullPath, f)));
-  } else {
-    filesToProcess = [relativeTarget];
-  }
+         return !fs.statSync(absF).isDirectory() && !relF.startsWith('.art') && (!shouldIgnore(relF) || !!activeState[relF]);
+       })
+       .map(f => path.relative(root, path.join(fullPath, f)));
+   } else {
+     filesToProcess = [relativeTarget];
+   }
 
-  if (filesToProcess.length === 0) return "No changes to add.";
+   if (filesToProcess.length === 0) return "No changes to add.";
 
-  for (const relPath of filesToProcess) {
-    const currentContent = fs.readFileSync(path.join(root, relPath), 'utf8');
-    const previousContent = activeState[relPath];
+   for (const relPath of filesToProcess) {
+     const currentContent = fs.readFileSync(path.join(root, relPath), 'utf8');
+     const previousContent = activeState[relPath];
 
-    if (previousContent === undefined) {
-      currentStaged[relPath] = { type: 'createFile', content: currentContent };
-    } else if (currentContent !== previousContent) {
-      let start = 0;
+     if (previousContent === undefined) {
+       currentStaged[relPath] = { type: 'createFile', content: currentContent };
+     } else if (currentContent !== previousContent) {
+       let start = 0;
 
-      while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
-        start++;
-      }
+       while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
+         start++;
+       }
 
-      let oldEnd = previousContent.length - 1;
-      let newEnd = currentContent.length - 1;
+       let oldEnd = previousContent.length - 1;
+       let newEnd = currentContent.length - 1;
 
-      while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
-        oldEnd--; newEnd--;
-      }
+       while (oldEnd >= start && newEnd >= start && previousContent[oldEnd] === currentContent[newEnd]) {
+         oldEnd--; newEnd--;
+       }
 
-      const operations = [];
-      const deletionLength = oldEnd - start + 1;
+       const operations = [];
+       const deletionLength = oldEnd - start + 1;
 
-      if (deletionLength > 0) {
-        operations.push({ type: 'delete', position: start, length: deletionLength });
-      }
+       if (deletionLength > 0) {
+         operations.push({
+           type: 'delete',
+           position: start,
+           length: deletionLength,
+           content: previousContent.slice(start, oldEnd + 1)
+         });
+       }
 
-      const insertionContent = currentContent.slice(start, newEnd + 1);
+       const insertionContent = currentContent.slice(start, newEnd + 1);
 
-      if (insertionContent.length > 0) {
-        operations.push({ type: 'insert', position: start, content: insertionContent });
-      }
+       if (insertionContent.length > 0) {
+         operations.push({ type: 'insert', position: start, content: insertionContent });
+       }
 
-      if (operations.length > 0) {
-        currentStaged[relPath] = operations;
-      }
-    }
-  }
+       if (operations.length > 0) {
+         currentStaged[relPath] = operations;
+       }
+     }
+   }
 
-  if (fs.existsSync(stageDir)) fs.rmSync(stageDir, { recursive: true, force: true });
+   if (fs.existsSync(stageDir)) fs.rmSync(stageDir, { recursive: true, force: true });
 
-  fs.mkdirSync(stageDir, { recursive: true });
+   fs.mkdirSync(stageDir, { recursive: true });
 
-  const stageParts = [];
+   const stageParts = [];
 
-  let currentPartChanges = {};
-  let currentSize = 0;
+   let currentPartChanges = {};
+   let currentSize = 0;
 
-  const savePart = () => {
-    const partName = `part.${stageParts.length}.json`;
+   const savePart = () => {
+     const partName = `part.${stageParts.length}.json`;
 
-    fs.writeFileSync(path.join(stageDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
-    stageParts.push(partName);
-    currentPartChanges = {};
-    currentSize = 0;
-  };
+     fs.writeFileSync(path.join(stageDir, partName), JSON.stringify({ changes: currentPartChanges }, null, 2));
+     stageParts.push(partName);
+     currentPartChanges = {};
+     currentSize = 0;
+   };
 
-  for (const [file, changes] of Object.entries(currentStaged)) {
-    const size = JSON.stringify(changes).length;
+   for (const [file, changes] of Object.entries(currentStaged)) {
+     const size = JSON.stringify(changes).length;
 
-    if (currentSize + size > MAX_PART_SIZE && Object.keys(currentPartChanges).length > 0) {
-      savePart();
-    }
+     if (currentSize + size > MAX_PART_SIZE && Object.keys(currentPartChanges).length > 0) {
+       savePart();
+     }
 
-    currentPartChanges[file] = changes;
-    currentSize += size;
-  }
+     currentPartChanges[file] = changes;
+     currentSize += size;
+   }
 
-  savePart();
+   savePart();
 
-  fs.writeFileSync(path.join(stageDir, 'manifest.json'), JSON.stringify({ parts: stageParts }, null, 2));
+   fs.writeFileSync(path.join(stageDir, 'manifest.json'), JSON.stringify({ parts: stageParts }, null, 2));
 
-  return `Added ${filesToProcess.length} file(s) to paginated stage.`;
-}
+   return `Added ${filesToProcess.length} file(s) to stage.`;
+ }
 
 /**
  * Finalizes the paginated stage into a paginated commit structure.
@@ -297,7 +302,7 @@ function commit (message) {
 }
 
 module.exports = {
-  __libraryVersion: '0.3.0',
+  __libraryVersion: '0.3.1',
   __libraryAPIName: 'Workflow',
   status,
   add,

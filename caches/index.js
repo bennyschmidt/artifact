@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Caches (v0.3.0)
+ * Module: Caches (v0.3.1)
  */
 
 const fs = require('fs');
@@ -15,7 +15,7 @@ const MAX_PART_SIZE = 32000000;
  * Helper to load all changes from a paginated directory (Stage or Stash).
  */
 
-function getPaginatedChanges(dirPath) {
+function getPaginatedChanges (dirPath) {
   const manifestPath = path.join(dirPath, 'manifest.json');
 
   if (!fs.existsSync(dirPath) || !fs.existsSync(manifestPath)) {
@@ -28,6 +28,7 @@ function getPaginatedChanges(dirPath) {
 
   for (const partName of manifest.parts) {
     const partPath = path.join(dirPath, partName);
+
     if (fs.existsSync(partPath)) {
       const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
 
@@ -205,9 +206,10 @@ function stash ({ pop = false, list = false } = {}) {
   if (fs.existsSync(stageDir)) {
     fs.rmSync(stageDir, { recursive: true, force: true });
   }
+
   checkout(artJson.active.branch, { force: true });
 
-  return `Saved working directory changes to paginated stash_${timestamp} and reverted to clean state.`;
+  return `Saved working directory changes to stash_${timestamp} and reverted to clean state.`;
 }
 
 function reset (hash) {
@@ -259,7 +261,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.3.0',
+  __libraryVersion: '0.3.1',
   __libraryAPIName: 'Caches',
   stash,
   reset,
