@@ -1,44 +1,79 @@
 #!/usr/bin/env node
 
 /**
- * art - Modern version control.
- * CLI (v0.3.2)
+ * Artifact - Modern version control.
+ * @author Benny Schmidt (https://github.com/bennyschmidt)
+ * @project https://github.com/bennyschmidt/artifact
+ * CLI (v0.3.3)
  */
 
-const art = require('../index.js');
+const artifact = require('../index.js');
 const path = require('path');
 
-const [,, command, ...args] = process.argv;
+/**
+ * Extract command line arguments
+ */
 
-const RED = '\x1b[31m';
-const GREEN = '\x1b[32m';
-const RESET = '\x1b[0m';
-const GRAY = '\x1b[90m';
+const [,, command, ...arguments] = process.argv;
+
+/**
+ * Console text color constants
+ */
+
+const {
+  RED,
+  GREEN,
+  RESET,
+  GRAY
+} = require('../utils/constants.js');
 
 async function run() {
   try {
     switch (command) {
+
+      /**
+       * init
+       * Initialize a new local repository.
+       */
+
       case 'init':
-        console.log(art.init(args[0]));
+        console.log(artifact.init(arguments[0]));
 
         break;
 
+      /**
+       * clone
+       * Clone an existing repository from a remote source.
+       */
+
       case 'clone':
-        if (!args[0]) {
+        if (!arguments[0]) {
           throw new Error('Specify a repository slug (handle/repo).');
         }
 
-        const tokenIndex = args.indexOf('--token');
-        const cliToken = (tokenIndex !== -1) && args[tokenIndex + 1];
+        const tokenIndex = arguments.indexOf('--token');
+        const cliToken = (tokenIndex !== -1) && arguments[tokenIndex + 1];
 
-        console.log(await art.clone(args[0], cliToken));
+        console.log(
+          await artifact.clone(arguments[0], cliToken)
+        );
 
         break;
+
+      /**
+       * config
+       * Set or update contributor configuration data.
+       */
 
       case 'config':
-        console.log(art.config(args[0], args[1]));
+        console.log(artifact.config(arguments[0], arguments[1]));
 
         break;
+
+      /**
+       * status
+       * Display the state of the working directory and the staging area.
+       */
 
       case 'status':
         const {
@@ -48,24 +83,33 @@ async function run() {
           modified,
           untracked,
           ignored
-        } = art.status();
+        } = artifact.status();
 
         console.log(`On branch ${activeBranch}`);
         console.log(`Last commit: ${lastCommit || 'None'}`);
 
         if (staged.length > 0) {
           console.log('\nChanges to be committed:');
-          staged.forEach(f => console.log(`${GREEN}\t${f}${RESET}`));
+
+          for (const file of staged) {
+            console.log(`${GREEN}\t${file}${RESET}`);
+          }
         }
 
         if (modified.length > 0) {
           console.log('\nChanges not staged for commit:');
-          modified.forEach(f => console.log(`${RED}\tmodified: ${f}${RESET}`));
+
+          for (const file of modified) {
+            console.log(`${RED}\tmodified: ${file}${RESET}`);
+          }
         }
 
         if (untracked.length > 0) {
           console.log('\nUntracked files:');
-          untracked.forEach(f => console.log(`${RED}\t${f}${RESET}`));
+
+          for (const file of untracked) {
+            console.log(`${RED}\t${file}${RESET}`);
+          }
         }
 
         if (ignored && ignored.length > 0) {
@@ -73,16 +117,19 @@ async function run() {
 
           const compressedIgnored = new Set();
 
-          ignored.forEach(f => {
-            const parts = f.split(path.sep);
+          for (const file of ignored) {
+            const parts = file.split(path.sep);
+
             if (parts.length > 1) {
               compressedIgnored.add(`${parts[0]}${path.sep}`);
             } else {
-              compressedIgnored.add(f);
+              compressedIgnored.add(file);
             }
-          });
+          }
 
-          compressedIgnored.forEach(f => console.log(`${GRAY}\t${f}${RESET}`));
+          for (const file of compressedIgnored) {
+            console.log(`${GRAY}\t${file}${RESET}`);
+          }
         }
 
         if (untracked.length === 0 && modified.length === 0 && staged.length === 0) {
@@ -91,77 +138,149 @@ async function run() {
 
         break;
 
-      case 'add':
-        if (!args[0]) throw new Error('Specify a file path to add.');
+      /**
+       * add
+       * Add file contents to the staging area.
+       */
 
-        console.log(art.add(args[0]));
+      case 'add':
+        if (!arguments[0]) {
+          throw new Error('Specify a file path to add.');
+        }
+
+        console.log(artifact.add(arguments[0]));
 
         break;
+
+      /**
+       * commit
+       * Record changes to the repository with a descriptive message.
+       */
 
       case 'commit':
-        if (!args[0]) throw new Error('Specify a commit message.');
-        console.log(art.commit(args[0]));
+        if (!arguments[0]) {
+          throw new Error('Specify a commit message.');
+        }
+
+        console.log(artifact.commit(arguments[0]));
 
         break;
+
+      /**
+       * branch
+       * List, create, or delete branches.
+       */
 
       case 'branch':
         const deleteFlags = ['--delete', '-d', '-D'];
-        const isDelete = deleteFlags.includes(args[0]);
-        const branchName = isDelete ? args[1] : args[0];
+        const isDelete = deleteFlags.includes(arguments[0]);
+        const branchName = isDelete ? arguments[1] : arguments[0];
 
-        const branches = art.branch({ name: branchName, isDelete });
+        const branches = artifact.branch({ name: branchName, isDelete });
 
         if (Array.isArray(branches)) {
-          for (const b of branches) console.log(b);
+          for (const branch of branches) {
+            console.log(branch);
+          }
         } else {
           console.log(branches);
         }
 
         break;
 
-      case 'checkout':
-        if (!args[0]) throw new Error('Specify a branch name.');
+      /**
+       * checkout
+       * Switch branches or restore working tree files.
+       */
 
-        console.log(art.checkout(args[0]));
+      case 'checkout':
+        if (!arguments[0]) {
+          throw new Error('Specify a branch name.');
+        }
+
+        console.log(artifact.checkout(arguments[0]));
 
         break;
+
+      /**
+       * merge
+       * Join two or more development histories together.
+       */
 
       case 'merge':
-        if (!args[0]) throw new Error('Specify a target branch to merge.');
+        if (!arguments[0]) {
+          throw new Error('Specify a target branch to merge.');
+        }
 
-        console.log(art.merge(args[0]));
+        console.log(artifact.merge(arguments[0]));
 
         break;
+
+      /**
+       * remote
+       * Manage set of tracked repositories.
+       */
 
       case 'remote':
-        console.log(art.remote(args[0]));
+        console.log(artifact.remote(arguments[0]));
 
         break;
+
+      /**
+       * fetch
+       * Download objects and refs from another repository.
+       */
 
       case 'fetch':
-        console.log(await art.fetch());
+        console.log(
+          await artifact.fetch()
+        );
 
         break;
+
+      /**
+       * pull
+       * Fetch from and integrate with another repository or a local branch.
+       */
 
       case 'pull':
-        console.log(await art.pull());
+        console.log(
+          await artifact.pull()
+        );
 
         break;
+
+      /**
+       * push
+       * Update remote refs along with associated objects.
+       */
 
       case 'push':
-        console.log(await art.push());
+        console.log(
+          await artifact.push()
+        );
 
-        await art.fetch()
+        await artifact.fetch()
 
         break;
+
+      /**
+       * log
+       * Show the commit history logs.
+       */
 
       case 'log':
-        console.log(art.log());
+        console.log(artifact.log());
 
         break;
 
+      /**
+       * diff
+       * Show changes between commits, commit and working tree, etc.
+       */
+
       case 'diff':
-        const { fileDiffs, staged: diffStaged } = art.diff();
+        const { fileDiffs, staged: diffStaged } = artifact.diff();
 
         if (fileDiffs.length === 0 && diffStaged.length === 0) {
           console.log('No changes detected.');
@@ -169,19 +288,19 @@ async function run() {
           break;
         }
 
-        for (const df of fileDiffs) {
-          console.log(`diff --art a/${df.file} b/${df.file}`);
+        for (const diffFile of fileDiffs) {
+          console.log(`diff --art a/${diffFile.file} b/${diffFile.file}`);
 
-          if (df.deleted) {
-            df.deleted.split('\n').forEach(line => {
+          if (diffFile.deleted) {
+            for (const line of diffFile.deleted.split('\n')) {
               console.log(`${RED}- ${line}${RESET}`);
-            });
+            }
           }
 
-          if (df.added) {
-            df.added.split('\n').forEach(line => {
+          if (diffFile.added) {
+            for (const line of diffFile.added.split('\n')) {
               console.log(`${GREEN}+ ${line}${RESET}`);
-            });
+            }
           }
 
           console.log('');
@@ -189,15 +308,23 @@ async function run() {
 
         if (diffStaged.length > 0) {
           console.log('--- Staged Changes ---');
-          diffStaged.forEach(f => console.log(`staged: ${GREEN}${f}${RESET}`));
+
+          for (const file of diffStaged) {
+            console.log(`staged: ${GREEN}${file}${RESET}`);
+          }
         }
 
         break;
 
+      /**
+       * stash
+       * Stash the changes in a dirty working directory away.
+       */
+
       case 'stash':
-        const isPop = args[0] === 'pop';
-        const isList = args[0] === 'list';
-        const result = art.stash({ pop: isPop, list: isList });
+        const isPop = arguments[0] === 'pop';
+        const isList = arguments[0] === 'list';
+        const result = artifact.stash({ pop: isPop, list: isList });
 
         if (isList && Array.isArray(result)) {
           if (result.length === 0) {
@@ -205,8 +332,8 @@ async function run() {
           } else {
             console.log('Saved stashes:');
 
-            for (const s of result) {
-              console.log(`${s.id}: WIP on branch: (${s.date})`);
+            for (const stash of result) {
+              console.log(`${stash.id}: WIP on branch: (${stash.date})`);
             }
           }
         } else {
@@ -215,25 +342,48 @@ async function run() {
 
         break;
 
+      /**
+       * reset
+       * Reset current HEAD to the specified state.
+       */
+
       case 'reset':
-        console.log(art.reset(args[0]));
+        console.log(artifact.reset(arguments[0]));
 
         break;
+
+      /**
+       * remove
+       * Remove files from the working tree and from the index.
+       */
 
       case 'remove':
       case 'rm':
-        if (!args[0]) throw new Error('Specify a file path to remove.');
+        if (!arguments[0]) {
+          throw new Error('Specify a file path to remove.');
+        }
 
-        console.log(art.rm(args[0]));
+        console.log(artifact.rm(arguments[0]));
 
         break;
+
+      /**
+       * version
+       * Output the current version of the Artifact CLI.
+       */
 
       case '--version':
       case '-v':
-        console.log(`art version ${art.version}`);
+        console.log(`art version ${artifact.version}`);
 
         break;
 
+      /**
+       * help
+       * Display help information about Artifact commands.
+       */
+
+      case 'help':
       default:
         console.log('Usage: art <command> [arguments]');
         console.log('Available commands: init, clone, status, add, commit, branch, checkout, merge, remote, fetch, pull, push, log, diff, stash, reset, rm');
@@ -243,5 +393,7 @@ async function run() {
     process.exit(1);
   }
 }
+
+// Execute the command line interface
 
 run();

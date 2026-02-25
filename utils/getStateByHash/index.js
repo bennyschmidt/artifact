@@ -1,87 +1,144 @@
 /**
- * art - Modern version control.
- * Module: Utils (v0.3.2)
+ * Artifact - Modern version control.
+ * @author Benny Schmidt (https://github.com/bennyschmidt)
+ * @project https://github.com/bennyschmidt/artifact
+ * Module: Utils / getStateByHash (v0.3.3)
  */
 
 const fs = require('fs');
 const path = require('path');
 
 /**
- * Helper to reconstruct file states at a specific commit hash.
+ * Reconstructs the full file state of a branch at a specific point in time by replaying commits.
+ * @param {string} branchName - The branch to read history from.
+ * @param {string} targetHash - The commit hash representing the desired state.
+ * @returns {Object} A map of file paths to their full string content.
  */
 
- module.exports = (branchName, targetHash) => {
-   const artPath = path.join(process.cwd(), '.art');
-   const rootPath = path.join(artPath, 'root/manifest.json');
+function getStateByHash (branchName, targetHash) {
+  /**
+   * Initialize repository paths and verify the existence of the root manifest.
+   */
 
-   if (!fs.existsSync(rootPath)) return {};
+  const artifactPath = path.join(process.cwd(), '.art');
+  const rootPath = path.join(artifactPath, 'root/manifest.json');
 
-   const rootMaster = JSON.parse(fs.readFileSync(rootPath, 'utf8'));
-   const branchPath = path.join(artPath, 'history/local', branchName);
-   const manifestPath = path.join(branchPath, 'manifest.json');
+  if (!fs.existsSync(rootPath)) {
+    return {};
+  }
 
-   if (!fs.existsSync(manifestPath)) return {};
+  /**
+   * Load the initial "root" state which serves as the base
+   * for all subsequent deltas.
+   */
 
-   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const rootMaster = JSON.parse(
+    fs.readFileSync(rootPath, 'utf8')
+  );
+  const branchPath = path.join(artifactPath, 'history/local', branchName);
+  const manifestPath = path.join(branchPath, 'manifest.json');
 
-   let state = {};
+  if (!fs.existsSync(manifestPath)) {
+    return {};
+  }
 
-   for (const partName of rootMaster.parts) {
-     const partPath = path.join(artPath, 'root', partName);
-     const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+  const manifest = JSON.parse(
+    fs.readFileSync(manifestPath, 'utf8')
+  );
 
-     for (const file of partData.files) {
-       state[file.path] = file.content;
-     }
-   }
+  let state = {};
 
-   if (!targetHash) return state;
+  /**
+   * Populate the state object with the original snapshots
+   * from the assembled root manifest parts.
+   */
 
-   for (const hash of manifest.commits) {
-     const commitPath = path.join(branchPath, `${hash}.json`);
+  for (const partName of rootMaster.parts) {
+    const partPath = path.join(artifactPath, 'root', partName);
+    const partData = JSON.parse(
+      fs.readFileSync(partPath, 'utf8')
+    );
 
-     if (!fs.existsSync(commitPath)) continue;
+    for (const file of partData.files) {
+      state[file.path] = file.content;
+    }
+  }
 
-     const commitMaster = JSON.parse(fs.readFileSync(commitPath, 'utf8'));
+  if (!targetHash) {
+    return state;
+  }
 
-     let fullChanges = {};
+  /**
+   * Replay the history of the branch chronologically,
+   * applying changes until the target hash is reached.
+   */
 
-     if (commitMaster.parts && Array.isArray(commitMaster.parts)) {
-       for (const partName of commitMaster.parts) {
-         const partPath = path.join(branchPath, partName);
-         if (fs.existsSync(partPath)) {
-           const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
-           Object.assign(fullChanges, partData.changes);
-         }
-       }
-     } else if (commitMaster.changes) {
-       fullChanges = commitMaster.changes;
-     }
+  for (const hash of manifest.commits) {
+    const commitPath = path.join(branchPath, `${hash}.json`);
 
-     for (const [filePath, changeSet] of Object.entries(fullChanges)) {
-       if (Array.isArray(changeSet)) {
-         let currentContent = state[filePath] || '';
+    if (!fs.existsSync(commitPath)) {
+      continue;
+    }
 
-         for (const operation of changeSet) {
-           if (operation.type === 'insert') {
-             currentContent = `${currentContent.slice(0, operation.position)}${operation.content}${currentContent.slice(operation.position)}`;
-           } else if (operation.type === 'delete') {
-             currentContent = `${currentContent.slice(0, operation.position)}${currentContent.slice(operation.position + operation.length)}`;
-           }
-         }
+    const commitMaster = JSON.parse(
+      fs.readFileSync(commitPath, 'utf8')
+    );
 
-         state[filePath] = currentContent;
-       } else {
-         if (changeSet.type === 'createFile') {
-           state[filePath] = changeSet.content;
-         } else if (changeSet.type === 'deleteFile') {
-           delete state[filePath];
-         }
-       }
-     }
+    let fullChanges = {};
 
-     if (hash === targetHash) break;
-   }
+    /**
+     * Consolidate changes from commit parts or the master commit file.
+     */
 
-   return state;
- };
+    if (commitMaster.parts && Array.isArray(commitMaster.parts)) {
+      for (const partName of commitMaster.parts) {
+        const partPath = path.join(branchPath, partName);
+
+        if (fs.existsSync(partPath)) {
+          const partData = JSON.parse(
+            fs.readFileSync(partPath, 'utf8')
+          );
+
+          Object.assign(fullChanges, partData.changes);
+        }
+      }
+    } else if (commitMaster.changes) {
+      fullChanges = commitMaster.changes;
+    }
+
+    /**
+     * Apply line-based operations (insert/delete)
+     * or file-level operations to the current state.
+     */
+
+    for (const [filePath, changeSet] of Object.entries(fullChanges)) {
+      if (Array.isArray(changeSet)) {
+        let currentContent = state[filePath] || '';
+
+        for (const operation of changeSet) {
+          if (operation.type === 'insert') {
+            currentContent = `${currentContent.slice(0, operation.position)}${operation.content}${currentContent.slice(operation.position)}`;
+          } else if (operation.type === 'delete') {
+            currentContent = `${currentContent.slice(0, operation.position)}${currentContent.slice(operation.position + operation.length)}`;
+          }
+        }
+
+        state[filePath] = currentContent;
+      } else {
+        if (changeSet.type === 'createFile') {
+          state[filePath] = changeSet.content;
+        } else if (changeSet.type === 'deleteFile') {
+          delete state[filePath];
+        }
+      }
+    }
+
+    if (hash === targetHash) {
+      break;
+    }
+  }
+
+  return state;
+}
+
+module.exports = getStateByHash;

@@ -1,6 +1,8 @@
 /**
- * art - Modern version control.
- * Module: Changes (v0.3.2)
+ * Artifact - Modern version control.
+ * @author Benny Schmidt (https://github.com/bennyschmidt)
+ * @project https://github.com/bennyschmidt/artifact
+ * Module: Changes (v0.3.3)
  */
 
 const fs = require('fs');
@@ -14,32 +16,51 @@ const getStateByHash = require('../utils/getStateByHash');
  */
 
 function log () {
-  const artPath = path.join(process.cwd(), '.art');
-  const artJsonPath = path.join(artPath, 'art.json');
+  /**
+   * Initialize repository paths and verify the existence of an .art directory
+   */
 
-  if (!fs.existsSync(artJsonPath)) {
+  const artifactPath = path.join(process.cwd(), '.art');
+  const artifactJsonPath = path.join(artifactPath, 'art.json');
+
+  if (!fs.existsSync(artifactJsonPath)) {
     throw new Error('No art repository found.');
   }
 
-  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
-  const branch = artJson.active.branch;
-  const branchPath = path.join(artPath, 'history/local', branch);
+  /**
+   * Retrieve active branch details and locate the history manifest.
+   */
+
+  const artifactJson = JSON.parse(
+    fs.readFileSync(artifactJsonPath, 'utf8')
+  );
+  
+  const branch = artifactJson.active.branch;
+  const branchPath = path.join(artifactPath, 'history/local', branch);
   const manifestPath = path.join(branchPath, 'manifest.json');
 
   if (!fs.existsSync(manifestPath)) {
     return 'No commits found.';
   }
 
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const manifest = JSON.parse(
+    fs.readFileSync(manifestPath, 'utf8')
+  );
 
   let output = `Branch: ${branch}\n\n`;
+
+  /**
+   * Build the commit history in reverse chronological order.
+   */
 
   for (let i = manifest.commits.length - 1; i >= 0; i--) {
     const hash = manifest.commits[i];
     const commitMasterPath = path.join(branchPath, `${hash}.json`);
 
     if (fs.existsSync(commitMasterPath)) {
-      const commitData = JSON.parse(fs.readFileSync(commitMasterPath, 'utf8'));
+      const commitData = JSON.parse(
+        fs.readFileSync(commitMasterPath, 'utf8')
+      );
 
       output += `commit ${commitData.hash}\n`;
       output += `Date: ${new Date(commitData.timestamp).toLocaleString()}\n`;
@@ -56,23 +77,40 @@ function log () {
  */
 
 function diff () {
-  const root = process.cwd();
-  const artPath = path.join(root, '.art');
-  const artJsonPath = path.join(artPath, 'art.json');
+  /**
+   * Set up environment roots and retrieve the state of the last committed parent.
+   */
 
-  if (!fs.existsSync(artJsonPath)) {
+  const root = process.cwd();
+  const artifactPath = path.join(root, '.art');
+  const artifactJsonPath = path.join(artifactPath, 'art.json');
+
+  if (!fs.existsSync(artifactJsonPath)) {
     throw new Error('No art repository found.');
   }
 
-  const artJson = JSON.parse(fs.readFileSync(artJsonPath, 'utf8'));
-  const activeBranch = artJson.active.branch;
-  const lastCommitHash = artJson.active.parent;
+  const artifactJson = JSON.parse(
+    fs.readFileSync(artifactJsonPath, 'utf8')
+  );
+
+  const activeBranch = artifactJson.active.branch;
+  const lastCommitHash = artifactJson.active.parent;
   const lastCommitState = lastCommitHash ? getStateByHash(activeBranch, lastCommitHash) : {};
 
+  /**
+   * Scan the working directory for files, excluding the .art internal folder.
+   */
+
   const currentFiles = fs.readdirSync(root, { recursive: true })
-    .filter(f => !f.startsWith('.art') && !fs.statSync(path.join(root, f)).isDirectory());
+    .filter(file => {
+      return !file.startsWith('.art') && !fs.statSync(path.join(root, file)).isDirectory();
+    });
 
   const fileDiffs = [];
+
+  /**
+   * Calculate differences between current file content and the last known state.
+   */
 
   for (const filePath of currentFiles) {
     const fullPath = path.join(root, filePath);
@@ -83,6 +121,10 @@ function diff () {
     const previousContent = lastCommitState[filePath] || '';
 
     if (!isBinary && currentContent !== previousContent) {
+      /**
+       * Identify the range of changed characters to generate a compact diff.
+       */
+
       let start = 0;
 
       while (start < previousContent.length && start < currentContent.length && previousContent[start] === currentContent[start]) {
@@ -103,40 +145,62 @@ function diff () {
         added: currentContent.slice(start, newEnd + 1)
       });
     } else if (isBinary) {
-      const prevHash = lastCommitState[filePath] ? 'exists' : 'null';
+      /**
+       * Handle binary files by checking existence rather than performing a text-based diff.
+       */
 
-      if (prevHash === 'null') {
-        fileDiffs.push({ file: filePath, added: '<Binary Data>', deleted: '' });
+      const previousHash = lastCommitState[filePath] ? 'exists' : 'null';
+
+      if (previousHash === 'null') {
+        fileDiffs.push({
+          file: filePath,
+          added: '<Binary Data>',
+          deleted: ''
+        });
       }
     }
   }
 
-  const stageDir = path.join(artPath, 'stage');
-  const stageManifestPath = path.join(stageDir, 'manifest.json');
+  /**
+   * Access the staging area to identify files currently prepared for the next commit.
+   */
+
+  const stageDirectory = path.join(artifactPath, 'stage');
+  const stageManifestPath = path.join(stageDirectory, 'manifest.json');
 
   let staged = [];
 
   if (fs.existsSync(stageManifestPath)) {
-    const manifest = JSON.parse(fs.readFileSync(stageManifestPath, 'utf8'));
+    const manifest = JSON.parse(
+      fs.readFileSync(stageManifestPath, 'utf8')
+    );
     const stagedFilesSet = new Set();
 
     for (const partName of manifest.parts) {
-      const partPath = path.join(stageDir, partName);
+      const partPath = path.join(stageDirectory, partName);
 
       if (fs.existsSync(partPath)) {
-        const partData = JSON.parse(fs.readFileSync(partPath, 'utf8'));
+        const partData = JSON.parse(
+          fs.readFileSync(partPath, 'utf8')
+        );
 
-        Object.keys(partData.changes).forEach(file => stagedFilesSet.add(file));
+        for (const file of Object.keys(partData.changes)) {
+          stagedFilesSet.add(file);
+        }
       }
     }
+
     staged = Array.from(stagedFilesSet);
   }
 
-  return { fileDiffs, staged };
+  return {
+    fileDiffs,
+    staged
+  };
 }
 
 module.exports = {
-  __libraryVersion: '0.3.2',
+  __libraryVersion: '0.3.3',
   __libraryAPIName: 'Changes',
   log,
   diff
