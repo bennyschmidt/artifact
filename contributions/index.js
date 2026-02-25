@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Contributions (v0.3.1)
+ * Module: Contributions (v0.3.2)
  */
 
 const fs = require('fs');
@@ -245,11 +245,14 @@ async function push () {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           handle, repo, branch, partName, partData,
+
           ...(token && { personalAccessToken: token })
         })
       });
 
-      if (!partRes.ok) throw new Error(`Server failed to receive part ${partName}`);
+      if (!partRes.ok) {
+        throw new Error(`Server failed to receive part ${partName}`);
+      }
     }
 
     currentRemoteManifest.commits.push(commitHash);

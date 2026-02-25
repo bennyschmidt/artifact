@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Utils (v0.3.1)
+ * Module: Utils (v0.3.2)
  */
 
 const fs = require('fs');

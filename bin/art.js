@@ -2,7 +2,7 @@
 
 /**
  * art - Modern version control.
- * CLI (v0.3.1)
+ * CLI (v0.3.2)
  */
 
 const art = require('../index.js');
@@ -150,6 +150,8 @@ async function run() {
 
       case 'push':
         console.log(await art.push());
+
+        await art.fetch()
 
         break;
 

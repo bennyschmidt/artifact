@@ -1,6 +1,6 @@
 /**
  * art - Modern version control.
- * Module: Branching (v0.3.1)
+ * Module: Branching (v0.3.2)
  */
 
 const fs = require('fs');
@@ -297,7 +297,7 @@ function checkout (branchName, { force = false } = {}) {
  }
 
 module.exports = {
-  __libraryVersion: '0.3.1',
+  __libraryVersion: '0.3.2',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

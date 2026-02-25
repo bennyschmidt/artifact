@@ -1,6 +1,6 @@
 {
   "name": "pagan-artifact",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Modern version control.",
   "main": "index.js",
   "bin": {
