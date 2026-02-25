@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Branching (v0.3.3)
+ * Module: Branching (v0.3.4)
  */
 
 const fs = require('fs');
@@ -453,7 +453,7 @@ function merge (targetBranch) {
 }
 
 module.exports = {
-  __libraryVersion: '0.3.3',
+  __libraryVersion: '0.3.4',
   __libraryAPIName: 'Branching',
   branch,
   checkout,

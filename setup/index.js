@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Setup (v0.3.3)
+ * Module: Setup (v0.3.4)
  */
 
 const fs = require('fs');

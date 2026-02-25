@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Utility / shouldIgnore (v0.3.3)
+ * Module: Utility / shouldIgnore (v0.3.4)
  */
 
 const fs = require('fs');

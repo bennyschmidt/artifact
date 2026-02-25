@@ -4,17 +4,17 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * CLI (v0.3.3)
+ * CLI (v0.3.4)
  */
 
 const artifact = require('../index.js');
 const path = require('path');
 
 /**
- * Extract command line arguments
+ * Extract command line args
  */
 
-const [,, command, ...arguments] = process.argv;
+const [,, command, ...args] = process.argv;
 
 /**
  * Console text color constants
@@ -37,7 +37,7 @@ async function run() {
        */
 
       case 'init':
-        console.log(artifact.init(arguments[0]));
+        console.log(artifact.init(args[0]));
 
         break;
 
@@ -47,15 +47,15 @@ async function run() {
        */
 
       case 'clone':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a repository slug (handle/repo).');
         }
 
-        const tokenIndex = arguments.indexOf('--token');
-        const cliToken = (tokenIndex !== -1) && arguments[tokenIndex + 1];
+        const tokenIndex = args.indexOf('--token');
+        const cliToken = (tokenIndex !== -1) && args[tokenIndex + 1];
 
         console.log(
-          await artifact.clone(arguments[0], cliToken)
+          await artifact.clone(args[0], cliToken)
         );
 
         break;
@@ -66,7 +66,7 @@ async function run() {
        */
 
       case 'config':
-        console.log(artifact.config(arguments[0], arguments[1]));
+        console.log(artifact.config(args[0], args[1]));
 
         break;
 
@@ -144,11 +144,11 @@ async function run() {
        */
 
       case 'add':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a file path to add.');
         }
 
-        console.log(artifact.add(arguments[0]));
+        console.log(artifact.add(args[0]));
 
         break;
 
@@ -158,11 +158,11 @@ async function run() {
        */
 
       case 'commit':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a commit message.');
         }
 
-        console.log(artifact.commit(arguments[0]));
+        console.log(artifact.commit(args[0]));
 
         break;
 
@@ -173,8 +173,8 @@ async function run() {
 
       case 'branch':
         const deleteFlags = ['--delete', '-d', '-D'];
-        const isDelete = deleteFlags.includes(arguments[0]);
-        const branchName = isDelete ? arguments[1] : arguments[0];
+        const isDelete = deleteFlags.includes(args[0]);
+        const branchName = isDelete ? args[1] : args[0];
 
         const branches = artifact.branch({ name: branchName, isDelete });
 
@@ -194,11 +194,11 @@ async function run() {
        */
 
       case 'checkout':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a branch name.');
         }
 
-        console.log(artifact.checkout(arguments[0]));
+        console.log(artifact.checkout(args[0]));
 
         break;
 
@@ -208,11 +208,11 @@ async function run() {
        */
 
       case 'merge':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a target branch to merge.');
         }
 
-        console.log(artifact.merge(arguments[0]));
+        console.log(artifact.merge(args[0]));
 
         break;
 
@@ -222,7 +222,7 @@ async function run() {
        */
 
       case 'remote':
-        console.log(artifact.remote(arguments[0]));
+        console.log(artifact.remote(args[0]));
 
         break;
 
@@ -322,8 +322,8 @@ async function run() {
        */
 
       case 'stash':
-        const isPop = arguments[0] === 'pop';
-        const isList = arguments[0] === 'list';
+        const isPop = args[0] === 'pop';
+        const isList = args[0] === 'list';
         const result = artifact.stash({ pop: isPop, list: isList });
 
         if (isList && Array.isArray(result)) {
@@ -348,7 +348,7 @@ async function run() {
        */
 
       case 'reset':
-        console.log(artifact.reset(arguments[0]));
+        console.log(artifact.reset(args[0]));
 
         break;
 
@@ -359,11 +359,11 @@ async function run() {
 
       case 'remove':
       case 'rm':
-        if (!arguments[0]) {
+        if (!args[0]) {
           throw new Error('Specify a file path to remove.');
         }
 
-        console.log(artifact.rm(arguments[0]));
+        console.log(artifact.rm(args[0]));
 
         break;
 
@@ -385,7 +385,7 @@ async function run() {
 
       case 'help':
       default:
-        console.log('Usage: art <command> [arguments]');
+        console.log('Usage: art <command> [args]');
         console.log('Available commands: init, clone, status, add, commit, branch, checkout, merge, remote, fetch, pull, push, log, diff, stash, reset, rm');
     }
   } catch (error) {
