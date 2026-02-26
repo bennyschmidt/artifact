@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Caches (v0.3.4)
+ * Module: Caches (v0.3.5)
  */
 
 const fs = require('fs');
@@ -441,7 +441,7 @@ function rm (filePath) {
 }
 
 module.exports = {
-  __libraryVersion: '0.3.4',
+  __libraryVersion: '0.3.5',
   __libraryAPIName: 'Caches',
   stash,
   reset,

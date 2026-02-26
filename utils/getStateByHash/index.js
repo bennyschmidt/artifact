@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Utils / getStateByHash (v0.3.4)
+ * Module: Utils / getStateByHash (v0.3.5)
  */
 
 const fs = require('fs');

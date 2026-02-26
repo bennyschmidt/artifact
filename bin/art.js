@@ -4,7 +4,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * CLI (v0.3.4)
+ * CLI (v0.3.5)
  */
 
 const artifact = require('../index.js');

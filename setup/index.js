@@ -2,7 +2,7 @@
  * Artifact - Modern version control.
  * @author Benny Schmidt (https://github.com/bennyschmidt)
  * @project https://github.com/bennyschmidt/artifact
- * Module: Setup (v0.3.4)
+ * Module: Setup (v0.3.5)
  */
 
 const fs = require('fs');
@@ -10,7 +10,7 @@ const path = require('path');
 
 const pkg = require('../package.json');
 const shouldIgnore = require('../utils/shouldIgnore');
-const { MAX_PART_CHARS } = require('../utils/constants');
+const { MAX_PART_SIZE } = require('../utils/constants');
 
 const ARTIFACT_HOST = pkg.artConfig.host || 'http://localhost:1337';
 
@@ -111,7 +111,7 @@ function init (directoryPath = process.cwd()) {
     if (fs.lstatSync(fullPath).isFile()) {
       const content = fs.readFileSync(fullPath, 'utf8');
 
-      if (currentPartChars + content.length > MAX_PART_CHARS && currentPartFiles.length > 0) {
+      if (currentPartChars + content.length > MAX_PART_SIZE && currentPartFiles.length > 0) {
         saveManifestPart();
       }
 
@@ -344,7 +344,7 @@ async function clone (repoSlug, providedToken = null) {
                 repo,
                 branch: 'main',
                 partName,
-                
+
                 ...(token && { personalAccessToken: token })
               })
             }
