@@ -1,0 +1,16 @@
+node_modules
+.env
+.env.dev
+.env.prod
+ssl
+dump.rdb
+dump
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.eslintcache
+npm-debug.log*
+.git
+package-lock.json
