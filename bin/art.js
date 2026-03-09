@@ -344,7 +344,7 @@ async function run() {
 
       /**
        * reset
-       * Reset current HEAD to the specified state.
+       * Reset active to the specified state.
        */
 
       case 'reset':

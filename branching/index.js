@@ -12,7 +12,7 @@ const getStateByHash = require('../utils/getStateByHash');
 const { MAX_PART_SIZE } = require('../utils/constants');
 
 /**
- * Lists all existing branches, creates a new branch from the current HEAD,
+ * Lists all existing branches, creates a new branch from the active one,
  * or deletes an existing branch from the local and remote history.
  * * @param {Object} options - The branch options.
  * @param {string} options.name - The name of the branch to create or delete.

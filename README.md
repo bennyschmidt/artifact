@@ -1,6 +1,6 @@
 # Artifact
 
-Artifact is a modern and efficient version control system designed for simplicity and transparency. It tracks changes as discrete state snapshots and synchronizes seamlessly the network.
+Artifact is a modern and efficient version control system designed for simplicity and transparency. It tracks changes as discrete state snapshots and synchronizes seamlessly with the network.
 
 ## Installation
 
