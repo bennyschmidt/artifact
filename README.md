@@ -11,3 +11,5 @@ npm i -g pagan-artifact
 ```
 
 Available commands: `init`, `clone`, `status`, `add`, `commit`, `branch`, `checkout`, `merge`, `remote`, `fetch`, `pull`, `push`, `log`, `diff`, `stash`, `reset`, `rm`
+
+###### Note: This is the **original** Artifact large file source control for game dev. [View Commits](https://github.com/bennyschmidt/artifact/commits/master/) 
