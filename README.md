@@ -12,4 +12,4 @@ npm i -g pagan-artifact
 
 Available commands: `init`, `clone`, `status`, `add`, `commit`, `branch`, `checkout`, `merge`, `remote`, `fetch`, `pull`, `push`, `log`, `diff`, `stash`, `reset`, `rm`
 
-###### Note: This is the *original* Artifact large file source control! The complete alternative to git. [View Commits](https://github.com/bennyschmidt/artifact/commits/master/) 
+###### Note: This is the *original* Artifact VCS! A complete alternative to git with built-in large file and binary diffing. [View Commits](https://github.com/bennyschmidt/artifact/commit/775094ac4bef8de66906d99ecd010a468f652259) 
